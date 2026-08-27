@@ -74,7 +74,7 @@ let soundVariant = 0;
 
 // HTMLAudio fallback — works if you add assets/kage_bunshin.mp3 (optional)
 // Path is relative to index.html so it works on GitHub Pages (/repo/) and Vercel (/)
-const cloneAudio = new Audio("assets/kage_bunshin.mp3");
+const cloneAudio = new Audio("../kage_bunshin.mp3");
 cloneAudio.preload = "auto";
 cloneAudio.volume = 0.8;
 // If file missing, preload will 404 but Web Audio fallback still works

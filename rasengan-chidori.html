@@ -278,8 +278,8 @@
             }
             jutsuScale[idx] = Math.min(2.5, jutsuScale[idx] + 0.015);
             activeVid.style.transform = `translate(-50%, -50%) scale(${jutsuScale[idx]})`;
-            activeVid.style.left = `${(1 - tx) * window.innerWidth}px`;
-            activeVid.style.top = `${ty * window.innerHeight}px`;
+            activeVid.style.left = `${(1 - tx) * cElement.clientWidth}px`;
+            activeVid.style.top = `${ty * cElement.clientHeight}px`;
             activeVid.style.display = 'block';
             showEffect = true;
           }
