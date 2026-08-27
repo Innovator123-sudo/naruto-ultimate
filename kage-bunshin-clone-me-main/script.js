@@ -72,13 +72,40 @@ let isMuted = localStorage.getItem("kage_sound_muted") === "true";
 let audioUnlocked = false;
 let soundVariant = 0;
 
-// HTMLAudio fallback — works if you add assets/kage_bunshin.mp3 (optional)
-// Path is relative to index.html so it works on GitHub Pages (/repo/) and Vercel (/)
-const cloneAudio = new Audio("../kage_bunshin.mp3");
+// HTMLAudio — robust multi-path resolver so it works on GitHub Pages (/naruto-ultimate/ subpath), Vercel root, and local file
+// Tries multiple candidates; first that loads wins. File exists at ../kage_bunshin.mp3, assets/kage_bunshin.mp3, kage_bunshin.mp3
+const cloneAudioCandidates = [
+  "../kage_bunshin.mp3",
+  "assets/kage_bunshin.mp3",
+  "./kage_bunshin.mp3",
+  "kage_bunshin.mp3",
+  "../assets/kage_bunshin.mp3",
+  "/kage_bunshin.mp3",
+  "/naruto-ultimate/kage_bunshin.mp3"
+];
+const cloneAudio = new Audio();
 cloneAudio.preload = "auto";
-cloneAudio.volume = 0.8;
-// If file missing, preload will 404 but Web Audio fallback still works
-cloneAudio.addEventListener("error", () => console.warn("kage_bunshin.mp3 not found — using Web Audio synthesis"));
+cloneAudio.volume = 0.85;
+cloneAudio.crossOrigin = "anonymous";
+let cloneAudioReady = false;
+let cloneAudioTried = 0;
+function tryNextCloneAudio(){
+  if (cloneAudioTried >= cloneAudioCandidates.length) {
+    console.warn("kage_bunshin.mp3 not found on any path — using Web Audio synthesis only");
+    return;
+  }
+  const rel = cloneAudioCandidates[cloneAudioTried++];
+  const url = new URL(rel, window.location.href).href;
+  cloneAudio.src = url;
+  console.log("Trying clone audio:", url);
+}
+cloneAudio.addEventListener("canplaythrough", () => { cloneAudioReady = true; console.log("✅ kage_bunshin.mp3 ready:", cloneAudio.src); });
+cloneAudio.addEventListener("error", () => {
+  console.warn("kage_bunshin.mp3 failed at", cloneAudio.src, "— trying next");
+  if (cloneAudioTried < cloneAudioCandidates.length) tryNextCloneAudio();
+  else console.warn("All clone audio paths failed — synth fallback only");
+});
+tryNextCloneAudio();
 
 function getAudioCtx() {
   if (!audioCtx) {
@@ -87,16 +114,21 @@ function getAudioCtx() {
     masterGain.gain.value = isMuted ? 0 : 0.7;
     masterGain.connect(audioCtx.destination);
   }
-  if (audioCtx.state === "suspended") {
-    audioCtx.resume().catch(()=>{});
-  }
   return audioCtx;
+}
+
+async function ensureAudioResumed(){
+  const ac = getAudioCtx();
+  if (ac.state === "suspended") {
+    try { await ac.resume(); } catch(e){}
+  }
+  return ac;
 }
 
 function unlockAudio() {
   if (audioUnlocked) return;
   const ac = getAudioCtx();
-  if (ac.state === "suspended") ac.resume();
+  ac.resume().catch(()=>{});
   // silent buffer unlocks iOS
   try {
     const buf = ac.createBuffer(1, 1, 22050);
@@ -107,11 +139,13 @@ function unlockAudio() {
   } catch(e){}
   audioUnlocked = true;
   console.log("🔊 Audio unlocked");
+  // also try to prime cloneAudio (requires gesture)
+  try { cloneAudio.load(); const p = cloneAudio.play(); if(p && p.then) p.then(()=>{ cloneAudio.pause(); cloneAudio.currentTime=0; }).catch(()=>{}); } catch(e){}
   updateSoundUI();
 }
 ["click","touchstart","keydown","pointerdown"].forEach(evt=>{
   document.addEventListener(evt, unlockAudio, { once:true, passive:true });
-  document.addEventListener(evt, ()=>{ if(audioCtx && audioCtx.state==="suspended") audioCtx.resume(); }, { passive:true });
+  document.addEventListener(evt, ()=>{ if(audioCtx && audioCtx.state==="suspended") ensureAudioResumed(); }, { passive:true });
 });
 
 function isSoundEnabled(){ return !isMuted; }
@@ -150,39 +184,53 @@ function playUISound(){
 }
 
 // Primary activation sound — works for ALL clones (global summon)
-function playCloneActivationSound() {
-  // Try HTMLAudio first (authentic Naruto SFX if file exists)
+async function playCloneActivationSound() {
+  if (isMuted) return;
+  // ensure context is resumed BEFORE any sound (critical for gesture-triggered play)
+  const ac = await ensureAudioResumed();
+  if (!audioUnlocked) unlockAudio();
   let htmlPlayed = false;
-  if (!isMuted) {
-    try {
-      cloneAudio.currentTime = 0;
-      const p = cloneAudio.play();
-      if (p && p.then) {
-        p.then(()=>{ htmlPlayed = true; }).catch(()=>{ synthCloneActivation(); });
-        // fallback synth in parallel if audio file is empty/short
-        setTimeout(()=>{ if(!htmlPlayed) synthCloneActivation(); }, 150);
-      } else {
-        htmlPlayed = true;
-      }
-    } catch(e) { synthCloneActivation(); }
+  try {
+    // always reset and try HTML audio first (authentic SFX)
+    cloneAudio.currentTime = 0;
+    cloneAudio.volume = 0.85;
+    cloneAudio.muted = false;
+    const p = cloneAudio.play();
+    if (p && p.then) {
+      await p.then(()=>{ htmlPlayed = true; }).catch((e)=>{
+        console.warn("cloneAudio play blocked:", e && e.message);
+        htmlPlayed = false;
+      });
+    } else {
+      htmlPlayed = true;
+    }
+  } catch(e) {
+    console.warn("cloneAudio play error", e);
+    htmlPlayed = false;
   }
-  // Always also play synth layer lightly for extra punch (unless muted)
-  if (!htmlPlayed) synthCloneActivation();
+  // If HTML audio failed or not ready, use synth; otherwise layer subtle synth underneath for punch
+  if (!htmlPlayed) {
+    synthCloneActivation();
+  } else {
+    // subtle layered synth when HTML succeeded — short delay so both audible but not overwhelming
+    setTimeout(()=> synthCloneActivation(true), 40);
+  }
 }
 
-function synthCloneActivation(){
+function synthCloneActivation(isLayer=false){
   try {
     const ac = getAudioCtx();
     if (isMuted) return;
-    if (ac.state === "suspended") ac.resume();
+    ensureAudioResumed();
     const now = ac.currentTime;
+    const layerScale = isLayer ? 0.45 : 1.0;
     // Layer 1: deep impact + rise
     const o1 = ac.createOscillator(), g1 = ac.createGain();
     o1.connect(g1); g1.connect(masterGain);
     o1.type = "sine";
     o1.frequency.setValueAtTime(80, now);
     o1.frequency.exponentialRampToValueAtTime(300, now + 0.4);
-    g1.gain.setValueAtTime(0.32, now);
+    g1.gain.setValueAtTime(0.32 * layerScale, now);
     g1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
     o1.start(now); o1.stop(now + 0.6);
     // Layer 2: harmonic energy
@@ -191,7 +239,7 @@ function synthCloneActivation(){
     o2.type = "triangle";
     o2.frequency.setValueAtTime(220, now);
     o2.frequency.exponentialRampToValueAtTime(660, now + 0.35);
-    g2.gain.setValueAtTime(0.12, now);
+    g2.gain.setValueAtTime(0.12 * layerScale, now);
     g2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     o2.start(now); o2.stop(now + 0.45);
     // Layer 3: noise burst poof
@@ -203,7 +251,7 @@ function synthCloneActivation(){
     const ng = ac.createGain(); const bp = ac.createBiquadFilter();
     bp.type="bandpass"; bp.frequency.value=1200; bp.Q.value=0.7;
     noise.connect(bp); bp.connect(ng); ng.connect(masterGain);
-    ng.gain.setValueAtTime(0.22, now);
+    ng.gain.setValueAtTime(0.22 * layerScale, now);
     ng.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     noise.start(now); noise.stop(now + 0.3);
   } catch(e){ console.warn(e); }
@@ -214,7 +262,7 @@ function playSmokePoofSound() {
   try {
     const ac = getAudioCtx();
     if (isMuted) return;
-    if (ac.state === "suspended") ac.resume();
+    ensureAudioResumed();
     soundVariant++;
     const baseFreq = 700 + (soundVariant % 5)*90;
     const bufLen = ac.sampleRate * 0.16;
@@ -253,7 +301,7 @@ function playEraseSound() {
   try {
     const ac = getAudioCtx();
     if (isMuted) return;
-    if (ac.state === "suspended") ac.resume();
+    ensureAudioResumed();
     const now = ac.currentTime;
     const o = ac.createOscillator(), g = ac.createGain();
     o.connect(g); g.connect(masterGain);
@@ -283,7 +331,7 @@ function playModelReadySound(){
   try{
     const ac=getAudioCtx();
     if(isMuted) return;
-    if(ac.state==="suspended") ac.resume();
+    ensureAudioResumed();
     [523.25,659.25,783.99].forEach((freq,i)=>{
       const o=ac.createOscillator(), g=ac.createGain();
       o.connect(g); g.connect(masterGain);
