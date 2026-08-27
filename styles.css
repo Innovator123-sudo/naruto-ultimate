@@ -1,0 +1,1014 @@
+/* ═══════════════════════════════════════════════════════════════
+   NARUTO JUTSU WEBSITE — Premium Design System
+   Enhanced dark theme with chakra energy aesthetics
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+/* ── Design Tokens ── */
+:root {
+  /* Core palette */
+  --bg-primary: #03030a;
+  --bg-secondary: #080816;
+  --bg-card: rgba(15, 15, 35, 0.8);
+  --bg-glass: rgba(255, 255, 255, 0.04);
+  --bg-glass-hover: rgba(255, 255, 255, 0.08);
+
+  /* Accent colors - Enhanced gradients */
+  --rasengan-blue: #00bfff;
+  --rasengan-blue-light: #66ddff;
+  --rasengan-blue-deep: #0088cc;
+  --rasengan-glow: rgba(0, 191, 255, 0.6);
+  
+  --chidori-purple: #b824ff;
+  --chidori-purple-light: #d980ff;
+  --chidori-purple-deep: #8a00cc;
+  --chidori-glow: rgba(184, 36, 255, 0.6);
+  
+  --sharingan-red: #ff1a1a;
+  --sharingan-red-light: #ff5555;
+  --sharingan-glow: rgba(255, 26, 26, 0.6);
+  
+  --shadow-cyan: #00e5ff;
+  --shadow-cyan-light: #5ff0ff;
+  --shadow-glow: rgba(0, 229, 255, 0.5);
+  
+  --orange-accent: #ff8800;
+  --orange-light: #ffaa44;
+  --orange-glow: rgba(255, 136, 0, 0.5);
+  
+  --chakra-green: #00ff88;
+  --chakra-green-light: #66ffbb;
+  --chakra-glow: rgba(0, 255, 136, 0.5);
+
+  /* Text */
+  --text-primary: #f0f0ff;
+  --text-secondary: rgba(240, 240, 255, 0.7);
+  --text-muted: rgba(240, 240, 255, 0.45);
+  --text-glow: rgba(240, 240, 255, 0.3);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-glow: rgba(0, 191, 255, 0.4);
+  --border-glow-hover: rgba(0, 191, 255, 0.6);
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+  --shadow-rasengan: 0 0 40px var(--rasengan-glow), 0 0 80px rgba(0, 191, 255, 0.3);
+  --shadow-chidori: 0 0 40px var(--chidori-glow), 0 0 80px rgba(184, 36, 255, 0.3);
+  --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-subtle);
+  --shadow-card-hover: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+/* ── Reset & Base ── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* Subtle animated background gradient */
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse at center, rgba(0, 191, 255, 0.03) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 20%, rgba(184, 36, 255, 0.03) 0%, transparent 40%),
+              radial-gradient(ellipse at 20% 80%, rgba(255, 136, 0, 0.03) 0%, transparent 40%);
+  animation: bgShift 30s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes bgShift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(2%, 2%) rotate(1deg); }
+  66% { transform: translate(-1%, 1%) rotate(-1deg); }
+}
+
+/* ── Particle Background ── */
+#particles-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Page Container ── */
+.page-wrapper {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Navigation Bar ── */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-2xl);
+  backdrop-filter: blur(20px);
+  background: rgba(5, 5, 16, 0.6);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  text-decoration: none;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.nav-brand .brand-icon {
+  font-size: 1.8rem;
+  animation: spin-slow 6s linear infinite;
+}
+
+.nav-brand .brand-text {
+  background: linear-gradient(135deg, var(--rasengan-blue), var(--chidori-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.nav-links {
+  display: flex;
+  gap: var(--space-lg);
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: color 0.3s ease;
+  position: relative;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--rasengan-blue);
+  transition: width 0.3s var(--ease-out);
+}
+
+.nav-links a:hover {
+  color: var(--text-primary);
+}
+
+.nav-links a:hover::after {
+  width: 100%;
+}
+
+/* ── Hero Section ── */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-3xl) var(--space-xl);
+  min-height: 40vh;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  animation: fade-in-up 0.6s var(--ease-out) both;
+}
+
+.hero-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00ff88;
+  animation: pulse-dot 2s ease infinite;
+}
+
+.hero h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: var(--space-md);
+  animation: fade-in-up 0.6s 0.1s var(--ease-out) both;
+}
+
+.hero h1 .gradient-text {
+  background: linear-gradient(135deg, var(--rasengan-blue) 0%, var(--chidori-purple) 50%, var(--orange-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero p {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin-bottom: var(--space-xl);
+  animation: fade-in-up 0.6s 0.2s var(--ease-out) both;
+}
+
+/* ── Jutsu Cards Grid ── */
+.jutsu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-xl);
+  padding: 0 var(--space-2xl) var(--space-3xl);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Individual Jutsu Card ── */
+.jutsu-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.5s var(--ease-out);
+  backdrop-filter: blur(12px);
+  animation: fade-in-up 0.6s var(--ease-out) both;
+}
+
+.jutsu-card:nth-child(1) { animation-delay: 0.3s; }
+.jutsu-card:nth-child(2) { animation-delay: 0.4s; }
+.jutsu-card:nth-child(3) { animation-delay: 0.5s; }
+
+.jutsu-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  transition: height 0.5s var(--ease-out);
+}
+
+.jutsu-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+/* Card Variants */
+.jutsu-card.rasengan::before {
+  background: linear-gradient(90deg, var(--rasengan-blue), var(--orange-accent));
+}
+.jutsu-card.rasengan::after {
+  background: radial-gradient(ellipse at top, rgba(0, 191, 255, 0.08), transparent 70%);
+}
+.jutsu-card.rasengan:hover {
+  border-color: rgba(0, 191, 255, 0.3);
+  box-shadow: 0 0 40px rgba(0, 191, 255, 0.12), 0 20px 60px rgba(0, 0, 0, 0.4);
+  transform: translateY(-8px);
+}
+
+.jutsu-card.shadow-clone::before {
+  background: linear-gradient(90deg, var(--shadow-cyan), #00ff88);
+}
+.jutsu-card.shadow-clone::after {
+  background: radial-gradient(ellipse at top, rgba(0, 229, 255, 0.08), transparent 70%);
+}
+.jutsu-card.shadow-clone:hover {
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 40px rgba(0, 229, 255, 0.12), 0 20px 60px rgba(0, 0, 0, 0.4);
+  transform: translateY(-8px);
+}
+
+.jutsu-card.sharingan::before {
+  background: linear-gradient(90deg, var(--sharingan-red), #ff6600);
+}
+.jutsu-card.sharingan::after {
+  background: radial-gradient(ellipse at top, rgba(255, 26, 26, 0.08), transparent 70%);
+}
+.jutsu-card.sharingan:hover {
+  border-color: rgba(255, 26, 26, 0.3);
+  box-shadow: 0 0 40px rgba(255, 26, 26, 0.12), 0 20px 60px rgba(0, 0, 0, 0.4);
+  transform: translateY(-8px);
+}
+
+.jutsu-card:hover::before {
+  height: 4px;
+}
+
+.jutsu-card:hover::after {
+  opacity: 1;
+}
+
+/* Card Image */
+.card-image {
+  width: 100%;
+  height: 200px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-lg);
+  position: relative;
+}
+
+.card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease-out), filter 0.6s ease;
+  filter: brightness(0.8) saturate(1.2);
+}
+
+.jutsu-card:hover .card-image img {
+  transform: scale(1.08);
+  filter: brightness(1) saturate(1.4);
+}
+
+/* Card Content */
+.card-tag {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 50px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.rasengan .card-tag {
+  background: rgba(0, 191, 255, 0.12);
+  color: var(--rasengan-blue);
+}
+.shadow-clone .card-tag {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--shadow-cyan);
+}
+.sharingan .card-tag {
+  background: rgba(255, 26, 26, 0.12);
+  color: var(--sharingan-red);
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: var(--space-sm);
+}
+
+.card-desc {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: var(--space-lg);
+}
+
+.card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: gap 0.3s var(--ease-out);
+}
+
+.rasengan .card-action { color: var(--rasengan-blue); }
+.shadow-clone .card-action { color: var(--shadow-cyan); }
+.sharingan .card-action { color: var(--sharingan-red); }
+
+.jutsu-card:hover .card-action {
+  gap: var(--space-md);
+}
+
+.card-action .arrow {
+  transition: transform 0.3s var(--ease-out);
+}
+
+.jutsu-card:hover .card-action .arrow {
+  transform: translateX(4px);
+}
+
+/* ── Full Screen Flash Transition ── */
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.flash-overlay.active {
+  animation: flash-burst 0.8s var(--ease-out) forwards;
+  pointer-events: all;
+}
+
+.flash-overlay.blue { background: var(--rasengan-blue); }
+.flash-overlay.cyan { background: var(--shadow-cyan); }
+.flash-overlay.red { background: var(--sharingan-red); }
+
+/* ── Back Button ── */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Page Header (sub pages) ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-2xl);
+  backdrop-filter: blur(20px);
+  background: rgba(5, 5, 16, 0.6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.page-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* ── Sharingan Page Specific ── */
+.sharingan-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xl);
+  padding: var(--space-3xl) var(--space-xl);
+}
+
+.eye-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.eye-selector label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.eye-count-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.eye-count-input button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 26, 26, 0.3);
+  background: rgba(255, 26, 26, 0.08);
+  color: var(--sharingan-red);
+  font-size: 1.5rem;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eye-count-input button:hover {
+  background: rgba(255, 26, 26, 0.2);
+  border-color: var(--sharingan-red);
+  box-shadow: 0 0 20px rgba(255, 26, 26, 0.3);
+}
+
+.eye-count-display {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--sharingan-red);
+  text-shadow: 0 0 30px rgba(255, 26, 26, 0.5);
+  min-width: 80px;
+  text-align: center;
+}
+
+.activate-btn {
+  padding: var(--space-md) var(--space-2xl);
+  background: linear-gradient(135deg, var(--sharingan-red), #cc0000);
+  border: none;
+  border-radius: 50px;
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-spring);
+  box-shadow: 0 4px 20px rgba(255, 26, 26, 0.3);
+}
+
+.activate-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 40px rgba(255, 26, 26, 0.5);
+}
+
+.activate-btn:active {
+  transform: scale(0.97);
+}
+
+/* Sharingan Eye Grid */
+.eye-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-xl);
+  padding: var(--space-xl) var(--space-2xl) var(--space-3xl);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.eye-card {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(255, 26, 26, 0.3);
+  cursor: pointer;
+  transition: all 0.4s var(--ease-spring);
+  animation: eye-appear 0.5s var(--ease-spring) both;
+}
+
+.eye-card:hover {
+  border-color: var(--sharingan-red);
+  box-shadow: 0 0 50px rgba(255, 26, 26, 0.4), 0 0 100px rgba(255, 26, 26, 0.15);
+  transform: scale(1.1);
+}
+
+.eye-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: spin-slow 8s linear infinite;
+}
+
+.eye-card.active img {
+  animation: spin-fast 0.5s linear infinite;
+}
+
+.eye-card .eye-label {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.eye-card:hover .eye-label {
+  bottom: -24px;
+  opacity: 1;
+}
+
+/* ── Shadow Clone Page ── */
+.clone-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-xl);
+  flex: 1;
+}
+
+.clone-video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  background: #000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.clone-activate-btn {
+  margin-top: var(--space-xl);
+  padding: var(--space-md) var(--space-2xl);
+  background: linear-gradient(135deg, var(--shadow-cyan), #00ff88);
+  border: none;
+  border-radius: 50px;
+  color: #050510;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-spring);
+  box-shadow: 0 4px 20px rgba(0, 229, 255, 0.3);
+}
+
+.clone-activate-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 40px rgba(0, 229, 255, 0.5);
+}
+
+/* ── Footer ── */
+.site-footer {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: auto;
+}
+
+/* ═══════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════ */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spin-fast {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+@keyframes flash-burst {
+  0% { opacity: 0; }
+  20% { opacity: 0.95; }
+  100% { opacity: 0.95; }
+}
+
+@keyframes eye-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-180deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes chakra-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 191, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 191, 255, 0.4);
+  }
+}
+
+@keyframes shake-violent {
+  0% { transform: translate(2px, 1px) rotate(0deg); }
+  10% { transform: translate(-1px, -2px) rotate(-1deg); }
+  20% { transform: translate(-3px, 0px) rotate(1deg); }
+  30% { transform: translate(0px, 2px) rotate(0deg); }
+  40% { transform: translate(1px, -1px) rotate(1deg); }
+  50% { transform: translate(-1px, 2px) rotate(-1deg); }
+  60% { transform: translate(-3px, 1px) rotate(0deg); }
+  70% { transform: translate(2px, 1px) rotate(-1deg); }
+  80% { transform: translate(-1px, -1px) rotate(1deg); }
+  90% { transform: translate(2px, 2px) rotate(0deg); }
+  100% { transform: translate(1px, -2px) rotate(-1deg); }
+}
+
+/* ═══════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .jutsu-grid {
+    grid-template-columns: 1fr;
+    padding: 0 var(--space-md) var(--space-2xl);
+  }
+
+  .nav-bar {
+    padding: var(--space-md);
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .hero h1 {
+    font-size: 2.2rem;
+  }
+
+  .hero p {
+    font-size: 1rem;
+  }
+
+  .page-header {
+    padding: var(--space-md);
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .eye-card {
+    width: 140px;
+    height: 140px;
+  }
+
+  .eye-grid {
+    padding: var(--space-md);
+    gap: var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: var(--space-xl) var(--space-md);
+  }
+
+  .card-image {
+    height: 160px;
+  }
+}
+
+/* ═══════════════════════════════════════
+   PREMIUM ENHANCEMENTS
+   ═══════════════════════════════════════ */
+
+/* Additional animations */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Enhanced card shadows */
+.jutsu-card {
+  box-shadow: var(--shadow-card);
+  transition: all 0.4s var(--ease-out-expo);
+}
+
+.jutsu-card.rasengan:hover {
+  box-shadow: 0 0 60px rgba(0, 191, 255, 0.2), 0 20px 80px rgba(0, 0, 0, 0.5);
+}
+
+.jutsu-card.shadow-clone:hover {
+  box-shadow: 0 0 60px rgba(0, 229, 255, 0.2), 0 20px 80px rgba(0, 0, 0, 0.5);
+}
+
+.jutsu-card.sharingan:hover {
+  box-shadow: 0 0 60px rgba(255, 26, 26, 0.2), 0 20px 80px rgba(0, 0, 0, 0.5);
+}
+
+/* Glowing border effect */
+.glow-border {
+  position: relative;
+}
+
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, var(--rasengan-blue), var(--chidori-purple), var(--orange-accent), var(--rasengan-blue));
+  background-size: 400% 400%;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  animation: gradientShift 3s ease infinite;
+}
+
+.glow-border:hover::before {
+  opacity: 0.8;
+}
+
+/* Premium button variants */
+.btn-rasengan {
+  background: linear-gradient(135deg, var(--rasengan-blue) 0%, var(--rasengan-blue-deep) 100%);
+  box-shadow: 0 4px 20px var(--rasengan-glow);
+}
+
+.btn-rasengan:hover {
+  box-shadow: 0 8px 40px var(--rasengan-glow), 0 0 60px rgba(0, 191, 255, 0.4);
+  transform: translateY(-3px);
+}
+
+.btn-chidori {
+  background: linear-gradient(135deg, var(--chidori-purple) 0%, var(--chidori-purple-deep) 100%);
+  box-shadow: 0 4px 20px var(--chidori-glow);
+}
+
+.btn-chidori:hover {
+  box-shadow: 0 8px 40px var(--chidori-glow), 0 0 60px rgba(184, 36, 255, 0.4);
+  transform: translateY(-3px);
+}
+
+.btn-sharingan {
+  background: linear-gradient(135deg, var(--sharingan-red) 0%, #cc0000 100%);
+  box-shadow: 0 4px 20px var(--sharingan-glow);
+}
+
+.btn-sharingan:hover {
+  box-shadow: 0 8px 40px var(--sharingan-glow), 0 0 60px rgba(255, 26, 26, 0.4);
+  transform: translateY(-3px);
+}
+
+/* Text glow effects */
+.text-glow-rasengan {
+  text-shadow: 0 0 20px var(--rasengan-glow), 0 0 40px var(--rasengan-glow);
+}
+
+.text-glow-chidori {
+  text-shadow: 0 0 20px var(--chidori-glow), 0 0 40px var(--chidori-glow);
+}
+
+.text-glow-sharingan {
+  text-shadow: 0 0 20px var(--sharingan-glow), 0 0 40px var(--sharingan-glow);
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-rasengan {
+  background: rgba(0, 191, 255, 0.15);
+  color: var(--rasengan-blue-light);
+  border: 1px solid rgba(0, 191, 255, 0.3);
+}
+
+.badge-chidori {
+  background: rgba(184, 36, 255, 0.15);
+  color: var(--chidori-purple-light);
+  border: 1px solid rgba(184, 36, 255, 0.3);
+}
+
+.badge-sharingan {
+  background: rgba(255, 26, 26, 0.15);
+  color: var(--sharingan-red-light);
+  border: 1px solid rgba(255, 26, 26, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--rasengan-blue), var(--chidori-purple));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--rasengan-blue-light), var(--chidori-purple-light));
+}
+
+/* Selection styling */
+::selection {
+  background: var(--rasengan-blue);
+  color: white;
+}
+
+::-moz-selection {
+  background: var(--rasengan-blue);
+  color: white;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--rasengan-blue);
+  outline-offset: 2px;
+}
+
+/* Loading spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--rasengan-blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

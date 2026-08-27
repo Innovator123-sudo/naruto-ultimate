@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Rasengan & Chidori AR — Open your palms to summon chakra powers using real-time hand tracking.">
+  <title>🌀 Rasengan & ⚡ Chidori — Hand Tracking AR</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    .ar-container {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #v_src, #out {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #out { z-index: 2; pointer-events: none; }
+
+    .fx {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1000px;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: none;
+      display: none;
+      mix-blend-mode: screen;
+      z-index: 20;
+    }
+
+    #combat_log {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 50;
+      background: rgba(5, 0, 15, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-left: 5px solid var(--chidori-purple);
+      padding: 12px 20px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s var(--ease-spring);
+    }
+
+    .log-title {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .log-msg {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      color: var(--chidori-purple);
+      text-shadow: 0 0 10px var(--chidori-purple);
+      transition: all 0.3s ease;
+      letter-spacing: 1px;
+    }
+
+    #combat_log.state-chidori {
+      border-left-color: var(--chidori-purple);
+      box-shadow: 0 0 20px rgba(184, 36, 255, 0.3);
+    }
+    #combat_log.state-chidori .log-msg {
+      color: var(--chidori-purple);
+      text-shadow: 0 0 10px var(--chidori-purple);
+    }
+
+    #combat_log.state-rasengan {
+      border-left-color: var(--orange-accent);
+      box-shadow: 0 0 20px rgba(255, 136, 0, 0.3);
+    }
+    #combat_log.state-rasengan .log-msg {
+      color: var(--orange-accent);
+      text-shadow: 0 0 10px var(--orange-accent);
+    }
+
+    #combat_log.state-clash {
+      border-left-color: #ff1100;
+      animation: shake-violent 0.3s infinite;
+    }
+    #combat_log.state-clash .log-msg {
+      color: #ff3333;
+      text-shadow: 0 0 15px #ff1100;
+    }
+
+    .camera-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      background: rgba(5, 0, 15, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      backdrop-filter: blur(8px);
+      font-family: 'Outfit', sans-serif;
+      animation: fade-in-up 1s 1.5s var(--ease-out) both;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <!-- Header -->
+    <header class="page-header">
+      <a href="index.html" class="back-btn" id="backBtn">
+        ← Back to Jutsu Hub
+      </a>
+      <h1 class="page-title">🌀 Rasengan & ⚡ Chidori</h1>
+      <div></div>
+    </header>
+
+    <!-- AR Container -->
+    <div class="ar-container">
+      <video id="v_src" autoplay playsinline></video>
+      <canvas id="out"></canvas>
+
+      <div id="combat_log" class="state-idle">
+        <div class="log-title">JUTSU STATUS</div>
+        <div id="log_message" class="log-msg">// STANDBY</div>
+      </div>
+
+      <video id="vid_rasengan" class="fx" src="assets/jeet_left_aura.mp4" muted autoplay playsinline></video>
+      <video id="vid_chidori" class="fx" src="assets/jeet_right_aura.mp4" muted autoplay playsinline></video>
+
+      <div class="camera-hint">
+        ✋ Open your palms toward the camera to activate chakra
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Determine which jutsu to show from URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    const jutsuMode = urlParams.get('jutsu') || 'rasengan';
+    const isChidori = jutsuMode.toLowerCase() === 'chidori';
+
+    // Update page title and header based on mode
+    document.title = isChidori ? '⚡ Chidori — Hand Tracking AR' : '🌀 Rasengan — Hand Tracking AR';
+    document.querySelector('.page-title').innerHTML = isChidori ? '⚡ Chidori' : '🌀 Rasengan';
+    document.querySelector('.camera-hint').innerHTML = isChidori
+      ? '✋ Open your palms to activate Chidori lightning'
+      : '✋ Open your palms to activate Rasengan chakra';
+
+    const vElement = document.getElementById('v_src');
+    const cElement = document.getElementById('out');
+    const ctx = cElement.getContext('2d');
+
+    const vidRasengan = document.getElementById('vid_rasengan');
+    const vidChidori = document.getElementById('vid_chidori');
+    const combatLog = document.getElementById('combat_log');
+    const logMessage = document.getElementById('log_message');
+
+    const rasenganAudio = new Audio('rasengan.mp3');
+    const chidoriAudio = new Audio('chidori.mp3');
+
+    // Hide the unused video element
+    if (isChidori) {
+      vidRasengan.style.display = 'none';
+      vidRasengan.pause();
+      vidRasengan.removeAttribute('src');
+    } else {
+      vidChidori.style.display = 'none';
+      vidChidori.pause();
+      vidChidori.removeAttribute('src');
+    }
+
+    let wasOpen = [false, false];
+    let jutsuScale = [1.0, 1.0];
+    let timeApp = 0;
+
+    const RASENGAN_LOOP_POINT = 3.4;
+    const CHIDORI_LOOP_POINT = 0;
+
+    vidRasengan.addEventListener('ended', () => {
+      vidRasengan.currentTime = RASENGAN_LOOP_POINT;
+      vidRasengan.play();
+    });
+
+    vidChidori.addEventListener('ended', () => {
+      vidChidori.currentTime = CHIDORI_LOOP_POINT;
+      vidChidori.play();
+    });
+
+    function checkOpen(pts) {
+      let count = 0;
+      const wrist = pts[0];
+      const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+      for (let i = 0; i < tips.length; i++) {
+        if (Math.hypot(pts[tips[i]].x - wrist.x, pts[tips[i]].y - wrist.y) >
+            Math.hypot(pts[pips[i]].x - wrist.x, pts[pips[i]].y - wrist.y)) count++;
+      }
+      return count >= 3;
+    }
+
+    function onResults(res) {
+      cElement.width = vElement.videoWidth;
+      cElement.height = vElement.videoHeight;
+
+      ctx.save();
+      ctx.clearRect(0, 0, cElement.width, cElement.height);
+      ctx.drawImage(res.image, 0, 0, cElement.width, cElement.height);
+
+      timeApp += 0.05;
+      let showEffect = false;
+
+      // Hide both by default each frame
+      vidRasengan.style.display = 'none';
+      vidChidori.style.display = 'none';
+
+      // Pick the active video element based on mode
+      const activeVid = isChidori ? vidChidori : vidRasengan;
+      const loopPoint = isChidori ? CHIDORI_LOOP_POINT : RASENGAN_LOOP_POINT;
+      const skelColorActive = isChidori ? '#b824ff' : '#ff8800';
+      const skelShadowActive = isChidori ? '#e024ff' : '#ffaa00';
+      const stateClass = isChidori ? 'state-chidori' : 'state-rasengan';
+      const activeMsg = isChidori ? '⚡ ACTIVATING CHIDORI ⚡' : '🌪️ RASEN SHURIKEN ACTIVE 🌪️';
+
+      if (res.multiHandLandmarks && res.multiHandedness) {
+        res.multiHandLandmarks.forEach((pts, i) => {
+          const label = res.multiHandedness[i].label;
+          const isPhysicalRight = label === 'Left';
+          const idx = isPhysicalRight ? 1 : 0;
+          const open = checkOpen(pts);
+
+          let skelColor = open ? skelColorActive : 'rgba(255, 255, 255, 0.2)';
+          let skelShadow = open ? skelShadowActive : 'transparent';
+
+          ctx.save();
+          ctx.shadowBlur = open ? 15 : 0;
+          ctx.shadowColor = skelShadow;
+          drawConnectors(ctx, pts, HAND_CONNECTIONS, {color: skelColor, lineWidth: open ? 4 : 2});
+          drawLandmarks(ctx, pts, {color: '#ffffff', lineWidth: 1, radius: open ? 3 : 2});
+          ctx.restore();
+
+          const wrist = pts[0], knk = pts[9];
+          const tx = (wrist.x + knk.x) / 2, ty = (wrist.y + knk.y) / 2;
+
+          if (open) {
+            if (!wasOpen[idx]) {
+              jutsuScale[idx] = 0.8;
+              activeVid.currentTime = 0;
+              activeVid.play();
+              // Play appropriate sound effect
+              if (isChidori) {
+                chidoriAudio.currentTime = 0;
+                chidoriAudio.play().catch(e => console.log(e));
+              } else {
+                rasenganAudio.currentTime = 0;
+                rasenganAudio.play().catch(e => console.log(e));
+              }
+            }
+            jutsuScale[idx] = Math.min(2.5, jutsuScale[idx] + 0.015);
+            activeVid.style.transform = `translate(-50%, -50%) scale(${jutsuScale[idx]})`;
+            activeVid.style.left = `${(1 - tx) * window.innerWidth}px`;
+            activeVid.style.top = `${ty * window.innerHeight}px`;
+            activeVid.style.display = 'block';
+            showEffect = true;
+          }
+          wasOpen[idx] = open;
+        });
+      }
+
+      if (showEffect) {
+        combatLog.className = stateClass;
+        logMessage.innerText = activeMsg;
+      } else {
+        combatLog.className = 'state-idle';
+        logMessage.innerText = "// STANDBY";
+      }
+
+      ctx.restore();
+    }
+
+    const h = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    h.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.85, minTrackingConfidence: 0.85 });
+    h.onResults(onResults);
+
+    const cam = new Camera(vElement, {
+      onFrame: async () => { await h.send({ image: vElement }); },
+      width: 1280,
+      height: 720
+    });
+    cam.start();
+  </script>
+
+</body>
+</html>
+

@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sharingan CV2 — Real-time pupil detection via OpenCV (cv2), blink to cycle Sharingan, rotation animation, audio per eye. Ported from Sharingan_Eyes_CV-main/sharingan.py (YOLO best.pt).">
+  <title>👁️ Sharingan CV2 — Real-time Eye Tracking</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- OpenCV.js (cv2 for web) — same as Python cv2
+       MUST define Module BEFORE opencv.js loads, otherwise onRuntimeInitialized never fires (previous bug = stuck at "Loading"). -->
+  <script>
+    window._cvRuntimeReady = false;
+    window._onCvRuntime = null;
+    var Module = {
+      onRuntimeInitialized: function(){
+        window._cvRuntimeReady = true;
+        if(window._onCvRuntime) window._onCvRuntime();
+        console.log("OpenCV.js runtime ready (cv2)");
+      }
+    };
+  </script>
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js" id="opencv-js" onerror="this.onerror=null; console.warn('docs.opencv.org failed, fallback cdn'); this.src='https://cdn.jsdelivr.net/npm/@opencv/opencv-js@4.8.0/opencv.js';"></script>
+  <style>
+    .sharingan-page { flex:1; display:flex; flex-direction:column; }
+    .sharingan-hero { text-align:center; padding: var(--space-2xl) var(--space-xl) var(--space-md); }
+    .sharingan-hero h2 { font-size:2rem; font-weight:800; margin-bottom:var(--space-sm); animation: fade-in-up 0.5s var(--ease-out) both; }
+    .sharingan-hero h2 .red-glow { color: var(--sharingan-red); text-shadow:0 0 30px rgba(255,26,26,0.5); }
+    .sharingan-hero p { color: var(--text-secondary); font-size:1rem; animation: fade-in-up 0.5s 0.1s var(--ease-out) both; max-width:720px; margin:0 auto; }
+    /* LIVE CV STAGE — port of cv2.imshow("Real-time Sharingan Overlay") */
+    #cv-section { max-width: 960px; margin: 0 auto; width:100%; padding: 0 var(--space-xl) var(--space-xl); }
+    .cv-card { background: rgba(15,15,35,0.85); border:1px solid rgba(255,26,26,0.18); border-radius:20px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset; }
+    .cv-stage { position:relative; width:100%; aspect-ratio: 4/3; max-height: 560px; background:#000; overflow:hidden; }
+    .cv-stage video#cam { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform: scaleX(-1); opacity:0; pointer-events:none; }
+    .cv-stage canvas#cv-canvas { position:absolute; inset:0; width:100%; height:100%; transform: scaleX(-1); display:block; background:#000; }
+    .cv-stage canvas#dbg-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; transform: scaleX(-1); }
+    .cv-overlay-bar { position:absolute; left:12px; right:12px; top:12px; display:flex; gap:8px; flex-wrap:wrap; z-index:5; }
+    .cv-badge { background:rgba(0,0,0,0.65); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.12); padding:6px 12px; border-radius:50px; font-size:0.75rem; font-weight:700; letter-spacing:0.5px; display:inline-flex; align-items:center; gap:6px; }
+    .cv-badge.live { background:rgba(255,26,26,0.18); border-color:rgba(255,26,26,0.35); color:#ff6b6b; }
+    .cv-badge.ok { background:rgba(0,255,136,0.14); border-color:rgba(0,255,136,0.3); color:#00ff88; }
+    .cv-badge.warn { background:rgba(255,193,7,0.14); border-color:rgba(255,193,7,0.3); color:#ffd54f; }
+    #cv-status { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.72); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.12); padding:10px 16px; border-radius:50px; font-size:0.82rem; color:#fff; z-index:5; max-width:90%; text-align:center; line-height:1.3; }
+    .cv-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; padding:16px; background: linear-gradient(180deg, rgba(255,26,26,0.06), transparent); border-top:1px solid rgba(255,255,255,0.06); }
+    .cv-btn { padding:10px 18px; border-radius:50px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:#fff; font-weight:700; font-size:0.85rem; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:8px; }
+    .cv-btn:hover { background:rgba(255,255,255,0.12); transform:translateY(-1px); }
+    .cv-btn.primary { background: linear-gradient(135deg, #ff1a1a, #cc0000); border-color: rgba(255,26,26,0.4); box-shadow:0 4px 20px rgba(255,26,26,0.3); }
+    .cv-btn.primary:hover { box-shadow:0 8px 30px rgba(255,26,26,0.45); }
+    .cv-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+    .cv-meta { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; padding:0 16px 16px; font-size:0.78rem; color:var(--text-secondary); }
+    .cv-meta span { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:6px 12px; border-radius:50px; }
+    .cv-meta strong { color:#fff; }
+    .cv-hint { text-align:center; color:var(--text-muted); font-size:0.78rem; padding:0 16px 18px; line-height:1.5; }
+    .cv-hint code { background:rgba(255,26,26,0.12); border:1px solid rgba(255,26,26,0.18); padding:1px 6px; border-radius:6px; color:#ff8888; font-family:monospace; }
+    /* Gallery reuse */
+    .eye-grid-container { min-height:200px; }
+    .eye-card { position:relative; }
+    .eye-card .eye-name-tag { position:absolute; bottom:-32px; left:50%; transform:translateX(-50%); font-size:0.7rem; font-weight:600; color:var(--sharingan-red); white-space:nowrap; opacity:0; transition:all 0.3s ease; text-shadow:0 0 8px rgba(255,26,26,0.5); }
+    .eye-card:hover .eye-name-tag { bottom:-28px; opacity:1; }
+    .eye-card.playing { border-color:var(--sharingan-red); box-shadow:0 0 60px rgba(255,26,26,0.5), 0 0 120px rgba(255,26,26,0.2); }
+    .eye-card.playing img { animation: spin-fast 0.4s linear infinite; }
+    .empty-state { text-align:center; padding: var(--space-3xl); color:var(--text-muted); font-size:1.1rem; }
+    .empty-state .big-eye { font-size:4rem; display:block; margin-bottom:var(--space-md); animation: pulse-dot 2s ease infinite; }
+    .audio-indicator { position:fixed; bottom:20px; right:20px; z-index:100; background:rgba(255,26,26,0.15); border:1px solid rgba(255,26,26,0.3); padding:8px 16px; border-radius:50px; font-size:0.8rem; color:var(--sharingan-red); font-family:'Outfit',sans-serif; opacity:0; transition:opacity 0.3s ease; pointer-events:none; }
+    .audio-indicator.visible { opacity:1; }
+    /* Tabs */
+    .tab-bar { display:flex; gap:8px; justify-content:center; margin:18px 0 14px; flex-wrap:wrap; }
+    .tab-btn { padding:8px 16px; border-radius:50px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:var(--text-secondary); font-weight:700; font-size:0.8rem; cursor:pointer; transition:all 0.2s; }
+    .tab-btn.active { background:rgba(255,26,26,0.15); border-color:rgba(255,26,26,0.35); color:#ff6b6b; }
+    /* Debug toggle */
+    .subtle-label { font-size:0.72rem; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <canvas id="particles-canvas"></canvas>
+  <div class="audio-indicator" id="audioIndicator">🔊 Playing...</div>
+
+  <div class="page-wrapper sharingan-page">
+
+    <header class="page-header">
+      <a href="index.html" class="back-btn">← Back to Jutsu Hub</a>
+      <h1 class="page-title" style="color: var(--sharingan-red); text-shadow:0 0 15px rgba(255,26,26,0.4);">👁️ Sharingan — CV2 Real-time</h1>
+      <div style="width:120px;"></div>
+    </header>
+
+    <section class="sharingan-hero">
+      <h2>Real-time <span class="red-glow">Sharingan</span> via cv2</h2>
+      <p>Ported 1:1 from <code style="background:rgba(255,26,26,0.12); padding:2px 6px; border-radius:6px; border:1px solid rgba(255,26,26,0.2);">Sharingan_Eyes_CV-main/sharingan.py</code> — <strong>OpenCV pupil detection</strong> (YOLO <code>best.pt</code> → <code>cv2.CascadeClassifier</code> eye detect in browser), <strong>0.7 alpha overlay</strong>, <strong>blink → next sharingan</strong> (3 closed frames, 0.5 s cooldown), <strong>720 ° / 2.4 s rotation</strong>, and audio per eye. Blink to cycle. Mirrors <code>cv2.imshow("Real-time Sharingan Overlay", frame)</code>.</p>
+      <div style="margin-top:12px; display:inline-flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+        <span class="cv-badge live">👁️ cv2 • OpenCV.js</span>
+        <span class="cv-badge">⚙️ scaling_factor = 1.0</span>
+        <span class="cv-badge">😉 blink threshold = 3 frames</span>
+        <span class="cv-badge">🔄 720° @ 2.4s</span>
+      </div>
+      <div style="margin-top:10px; font-size:0.75rem; color:var(--text-muted);">Python: <code>YOLO('/.../best.pt')</code> + <code>cv2.getRotationMatrix2D</code> + <code>pygame.mixer</code> — Web: <code>cv.CascadeClassifier</code> + <code>&lt;canvas&gt;</code> rotate + <code>Audio()</code>. Both detect → scale → alpha 0.7 → blend.</div>
+    </section>
+
+    <!-- LIVE CV SECTION — exact python behavior -->
+    <section id="cv-section">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('live')">🔴 Live CV (Blink)</button>
+        <button class="tab-btn" onclick="switchTab('gallery')">🖼️ Gallery (Voice / Click)</button>
+        <span style="font-size:0.7rem; color:var(--text-muted); align-self:center; margin-left:6px;">Tab switches only view — CV engine stays active in Live</span>
+      </div>
+
+      <div id="livePane">
+        <div class="cv-card">
+          <div class="cv-stage" id="cvStage">
+            <video id="cam" autoplay playsinline muted></video>
+            <canvas id="cv-canvas" width="640" height="480"></canvas>
+            <canvas id="dbg-canvas" width="640" height="480"></canvas>
+            <div class="cv-overlay-bar">
+              <span class="cv-badge live" id="badgeLive">● LIVE</span>
+              <span class="cv-badge" id="badgeEyes">👁️ Eyes: —</span>
+              <span class="cv-badge" id="badgeSharingan">🌀 Crimson Tomoe (1/10)</span>
+              <span class="cv-badge" id="badgeAudio" style="display:none;">🔊 —</span>
+            </div>
+            <div id="cv-status">⏳ Loading OpenCV.js (cv2)… <span id="cv-progress">0%</span><br><span style="font-size:0.72rem; opacity:0.8;">~8 MB • Camera can start before load — detection enables auto</span></div>
+            <div id="cv-placeholder" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:radial-gradient(ellipse at center, rgba(255,26,26,0.12), transparent 70%), #000; z-index:4; text-align:center; padding:20px;">
+              <div style="font-size:3.2rem; animation: pulse-dot 2s infinite;">👁️</div>
+              <div style="font-weight:800; color:#ff6b6b; font-size:1.1rem; letter-spacing:0.5px;">CV2 Sharingan Preview</div>
+              <div style="color:#aaa; font-size:0.8rem; max-width:340px; line-height:1.4;">Press <strong style="color:#fff;">Start Camera</strong> below.<br>Blink firmly → cycles through 10 sharingans. Python's <code>while True: cap.read()</code> loop appears here.</div>
+              <button onclick="startCam()" style="padding:10px 18px; border-radius:50px; border:none; background:linear-gradient(135deg,#ff1a1a,#cc0000); color:#fff; font-weight:800; cursor:pointer; box-shadow:0 4px 20px rgba(255,26,26,0.3);">📷 Start Camera</button>
+              <div style="font-size:0.68rem; color:#666;">or click <em>Next Eye</em> to test without camera</div>
+            </div>
+          </div>
+          <div class="cv-controls">
+            <button class="cv-btn primary" id="btnStart" onclick="startCam()">📷 Start Camera</button>
+            <button class="cv-btn" id="btnStop" onclick="stopCam()" disabled>⏹ Stop</button>
+            <button class="cv-btn" onclick="manualNext()">⏭ Next Eye (blink sim)</button>
+            <button class="cv-btn" onclick="manualPrev()">⏮ Prev</button>
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-secondary); cursor:pointer;"><input type="checkbox" id="chkDebug" onchange="toggleDebug(this.checked)"> Debug boxes</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-secondary); cursor:pointer;"><input type="range" id="scaleRange" min="0.8" max="1.6" step="0.05" value="1" oninput="scaling_factor=parseFloat(this.value); document.getElementById('scaleVal').textContent=scaling_factor.toFixed(2)" style="width:80px;"> <span class="subtle-label">Scale: <strong id="scaleVal">1.00</strong></span></label>
+          </div>
+          <div class="cv-meta">
+            <span>Detected: <strong id="metaDetected">—</strong></span>
+            <span>Eyes open: <strong id="metaOpen">—</strong></span>
+            <span>Closed frames: <strong id="metaClosed">0</strong></span>
+            <span>Cooldown: <strong id="metaCooldown">—</strong></span>
+            <span>Rotating: <strong id="metaRot">—</strong></span>
+          </div>
+          <div class="cv-hint">
+            <strong>How it matches <code>sharingan.py</code>:</strong><br>
+            Detection → <code>model(frame, imgsz=640)</code> with <code>confidence > 0.5</code> → web uses <code>cv.CascadeClassifier.detectMultiScale()</code> (cv2 eye cascade, same threshold). 
+            Overlay → <code>cv2.resize(current_sharingan, (scaled_width, scaled_height))</code> + <code>alpha*0.7</code> + per-pixel blend → web does <code>canvas.globalAlpha=0.7 + drawImage centered</code>. 
+            Blink → <code>consecutive_closed_frames >= 3</code> + <code>cooldown 0.5s</code> → identical. 
+            Rotation → <code>cv2.getRotationMatrix2D</code> + <code>warpAffine</code> @ 720°/2.4s → web <code>ctx.rotate(angle)</code>. 
+            Audio → <code>pygame.mixer.music</code> → web <code>new Audio().play()</code>. <br>
+            <span style="color:#ff6b6b;">Tip: Blink firmly (close ~200 ms) to trigger. Allow 0.5 s between blinks. Press “Next” to simulate blink without camera.</span>
+          </div>
+          <div style="padding:0 16px 14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.72rem; color:var(--text-muted);">
+            <span style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:50px;">Model: <code>best.pt</code> (YOLO) → web: <code>haarcascade_eye.xml</code> + <code>haarcascade_frontalface</code> via <code>cv2</code></span>
+            <span style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:6px 10px; border-radius:50px;">Press <code>Q</code> to stop (like <code>cv2.waitKey(1) &amp; 0xFF == ord('q')</code>)</span>
+          </div>
+        </div>
+        <!-- Mini gallery synced to CV index -->
+        <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px;">
+          <div style="background:rgba(255,26,26,0.08); border:1px solid rgba(255,26,26,0.18); padding:8px 12px; border-radius:50px; font-size:0.78rem; color:#ff8888;">Python loop: <code>while True: ret, frame=cap.read(); results=model(frame, imgsz=640); ... cv2.imshow</code></div>
+          <a href="Sharingan_Eyes_CV-main/Sharingan_Eyes_CV-main/sharingan.py" target="_blank" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:8px 12px; border-radius:50px; font-size:0.78rem; color:#fff; text-decoration:none;">📄 View original sharingan.py</a>
+        </div>
+      </div>
+
+      <div id="galleryPane" style="display:none;">
+        <!-- Controls for gallery (kept from original file) -->
+        <div class="sharingan-controls" style="padding-top:16px;">
+          <div class="eye-selector">
+            <label>Number of Eyes</label>
+            <div class="eye-count-input">
+              <button onclick="changeCount(-1)">−</button>
+              <span class="eye-count-display" id="eyeCountDisplay">0</span>
+              <button onclick="changeCount(1)">+</button>
+            </div>
+          </div>
+          <button class="activate-btn" onclick="activateSharingan()">👁️ AWAKEN SHARINGAN</button>
+          <div id="voiceStatus" style="display:inline-flex; align-items:center; gap:8px; background:rgba(255,26,26,0.12); border:1px solid rgba(255,26,26,0.3); padding:8px 16px; border-radius:50px; font-size:0.85rem; color:#ff6b6b; margin-top:4px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:#ff1a1a;animation:pulse-dot 1.2s infinite;display:inline-block;"></span>
+            <span id="voiceStatusText">🎤 Listening for eye number... say “three”</span>
+          </div>
+        </div>
+        <div class="eye-grid-container">
+          <div class="eye-grid" id="eyeGrid">
+            <div class="empty-state" id="emptyState">
+              <span class="big-eye">👁️</span>
+              Select the number of eyes and press Awaken<br><span style="font-size:0.8rem; opacity:0.6;">Or just use Live CV blink above — it shows the same eyes over your real pupils</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p>Sharingan — Copy Wheel Eye 👁️ • cv2 real-time • blink to cycle • Python parity • <a href="index.html" style="color:#ff6b6b;">Hub</a></p>
+    </footer>
+
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════
+   TAB SWITCH
+   ═══════════════════════════════════════════ */
+function switchTab(which){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(which==='live'){ document.querySelectorAll('.tab-btn')[0].classList.add('active'); document.getElementById('livePane').style.display=''; document.getElementById('galleryPane').style.display='none'; }
+  else { document.querySelectorAll('.tab-btn')[1].classList.add('active'); document.getElementById('galleryPane').style.display=''; document.getElementById('livePane').style.display='none'; }
+}
+
+/* ═══════════════════════════════════════════
+   SHARED ASSET MAP — same as python sorted order
+   Python: image_paths.sort(key=lambda x: int(basename)) ; audio sort same
+   Web assets are named but we map 1.mp3->Crimson etc to keep parity
+   10 sharingans: 1..10
+   ═══════════════════════════════════════════ */
+const SHARINGAN_ASSETS = "Sharingan_Eyes_CV-main/Sharingan_Eyes_CV-main/assets/";
+const AUDIO_ASSETS = "Sharingan_Eyes_CV-main/Sharingan_Eyes_CV-main/audio/";
+const EYE_DATA = [
+  { name: "Crimson Tomoe",      file: "Crimson Tomoe.png",      audio: "1.mp3" },
+  { name: "Blood Moon",         file: "Blood Moon Sharingan.png", audio: "2.mp3" },
+  { name: "Inferno Wheel",      file: "Inferno Wheel.png",      audio: "3.mp3" },
+  { name: "Crimson Cyclone",    file: "Crimson Cyclone.png",    audio: "4.mp3" },
+  { name: "Demon Spiral",       file: "Demon Spiral.png",       audio: "5.mp3" },
+  { name: "Phantom Blade",      file: "Phantom Blade.png",      audio: "6.mp3" },
+  { name: "Soul Reaper Eye",    file: "Soul Reaper Eye.png",    audio: "7.mp3" },
+  { name: "Eclipse Eye",        file: "Eclipse Eye.png",        audio: "8.mp3" },
+  { name: "Void Star",          file: "Void Star.png",          audio: "9.mp3" },
+  { name: "Celestial Rinnegan", file: "Celestial Rinnegan.png", audio: "10.mp3" },
+];
+// Preload images (cv2.imread equivalent — we keep Image objects)
+const sharinganImgs = EYE_DATA.map(e=>{
+  const im=new Image(); im.src=SHARINGAN_ASSETS+e.file; im.crossOrigin="anonymous"; return im;
+});
+let imageLoadCount=0; sharinganImgs.forEach(im=>{ im.onload=()=>imageLoadCount++; im.onerror=()=>console.warn("Missing",im.src); });
+
+/* ═══════════════════════════════════════════
+   PYTHON STATE VARIABLES — mirrored exactly
+   Python:
+     scaling_factor = 1
+     current_index = 0
+     audio_playing = False
+     last_transition_time = time.time()
+     transition_cooldown = 0.5
+     eyes_were_open = True
+     consecutive_closed_frames = 0
+     CLOSED_FRAMES_THRESHOLD = 3
+     rotation_duration = 2.4
+     rotation_speed = 720
+     is_rotating = False
+     rotation_start_time = 0
+     current_angle = 0
+   ═══════════════════════════════════════════ */
+let scaling_factor = 1.0;
+let current_index = 0;
+let audio_playing = false;
+let last_transition_time = performance.now()/1000;
+let transition_cooldown = 0.5;
+let eyes_were_open = true;
+let consecutive_closed_frames = 0;
+let CLOSED_FRAMES_THRESHOLD = 3;
+let rotation_duration = 2.4;
+let rotation_speed = 720;
+let is_rotating = false;
+let rotation_start_time = 0;
+let current_angle = 0;
+let currentAudio = null;
+
+/* UI refs */
+const video = document.getElementById('cam');
+const canvas = document.getElementById('cv-canvas');
+const ctx = canvas.getContext('2d');
+const dbgCanvas = document.getElementById('dbg-canvas');
+const dbgCtx = dbgCanvas.getContext('2d');
+const statusEl = document.getElementById('cv-status');
+const badgeEyes = document.getElementById('badgeEyes');
+const badgeSharingan = document.getElementById('badgeSharingan');
+const badgeAudio = document.getElementById('badgeAudio');
+const badgeLive = document.getElementById('badgeLive');
+const btnStart = document.getElementById('btnStart');
+const btnStop = document.getElementById('btnStop');
+const metaDetected = document.getElementById('metaDetected');
+const metaOpen = document.getElementById('metaOpen');
+const metaClosed = document.getElementById('metaClosed');
+const metaCooldown = document.getElementById('metaCooldown');
+const metaRot = document.getElementById('metaRot');
+
+function updateBadge(){
+  const info = EYE_DATA[current_index];
+  badgeSharingan.textContent = `🌀 ${info.name} (${current_index+1}/${EYE_DATA.length})`;
+  badgeSharingan.title = info.file;
+  document.title = `👁️ ${info.name} — Sharingan CV2`;
+}
+updateBadge();
+
+/* ── Audio helpers — mirrors python pygame.mixer — */
+function play_audio(index){
+  const file = AUDIO_ASSETS + EYE_DATA[index].audio;
+  try{ if(currentAudio){ currentAudio.pause(); currentAudio.currentTime=0; } }catch(e){}
+  const a = new Audio(file);
+  currentAudio = a; a.volume = 0.7;
+  a.play().then(()=>{ audio_playing=true; badgeAudio.style.display=''; badgeAudio.textContent=`🔊 ${EYE_DATA[index].name}`; badgeAudio.className='cv-badge ok'; document.getElementById('audioIndicator').textContent=`🔊 ${EYE_DATA[index].name}`; document.getElementById('audioIndicator').classList.add('visible'); }).catch(e=>{ console.warn("Audio blocked",e); badgeAudio.textContent="🔊 blocked — click to enable"; });
+  a.onended=()=>{ audio_playing=false; badgeAudio.style.display='none'; document.getElementById('audioIndicator').classList.remove('visible'); };
+  a.onerror=()=>{ console.warn("Audio load err",file); badgeAudio.textContent="🔊 no audio"; };
+}
+function stop_audio(){
+  try{ if(currentAudio){ currentAudio.pause(); currentAudio.currentTime=0; } }catch(e){}
+  audio_playing=false; currentAudio=null; badgeAudio.style.display='none';
+}
+
+/* ── Transition — mirrors python try_transition() — */
+function try_transition(){
+  const now = performance.now()/1000;
+  if(now - last_transition_time >= transition_cooldown){
+    stop_audio();
+    current_index = (current_index + 1) % EYE_DATA.length;
+    is_rotating = true;
+    rotation_start_time = now;
+    last_transition_time = now;
+    updateBadge();
+    play_audio(current_index);
+    // flash feedback like python would show next overlay rotating
+    canvas.animate([{filter:"brightness(1)"},{filter:"brightness(1.5)"},{filter:"brightness(1)"}],{duration:300});
+    return true;
+  }
+  return false;
+}
+function manualNext(){ try_transition(); }
+function manualPrev(){
+  const now=performance.now()/1000;
+  if(now - last_transition_time >= transition_cooldown){
+    stop_audio();
+    current_index = (current_index - 1 + EYE_DATA.length) % EYE_DATA.length;
+    is_rotating=true; rotation_start_time=now; last_transition_time=now; updateBadge(); play_audio(current_index);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   OpenCV.js (cv2) SETUP — mirrors python cv2
+   Python: model = YOLO('best.pt'); assets_folder=...; cv2.VideoCapture(0)
+   Web: eyeCascade = cv.CascadeClassifier('haarcascade_eye.xml')
+         faceCascade + cam getUserMedia ; cv.Mat per frame
+   We fetch cascades from OpenCV GitHub raw as cv2 data files.
+   ═══════════════════════════════════════════ */
+let cvReady=false, eyeCascade=null, faceCascade=null, eyeReady=false, faceReady=false;
+let capStream=null, rafId=null, running=false, showDebug=false;
+let lastIrisRects=[]; // for temporal smoothing of iris positions (fixes jitter + aligns like real eye)
+
+// URLs for cv2 cascade xml — try jsDelivr first (CORS friendly), fallback to raw github + docs.opencv
+const CASCADE_URLS = {
+  eye: [
+    "https://cdn.jsdelivr.net/gh/opencv/opencv@4.8.0/data/haarcascades/haarcascade_eye.xml",
+    "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_eye.xml",
+    "https://docs.opencv.org/4.8.0/haarcascade_eye.xml"
+  ],
+  face: [
+    "https://cdn.jsdelivr.net/gh/opencv/opencv@4.8.0/data/haarcascades/haarcascade_frontalface_default.xml",
+    "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml",
+    "https://docs.opencv.org/4.8.0/haarcascade_frontalface_default.xml"
+  ]
+};
+
+function toggleDebug(v){ showDebug=v; dbgCanvas.style.display=v?'block':'none'; if(!v) dbgCtx.clearRect(0,0,dbgCanvas.width,dbgCanvas.height); }
+
+function setStatus(html){
+  if(html) { statusEl.innerHTML = html; statusEl.style.display = ''; statusEl.style.opacity='1'; }
+  else { statusEl.style.display = 'none'; }
+}
+
+async function fetchWithFallback(urls, label){
+  let lastErr;
+  for(let u of urls){
+    try{
+      const r = await fetch(u, {cache:'force-cache'});
+      if(!r.ok) throw new Error(r.status);
+      return await r.arrayBuffer();
+    }catch(e){ lastErr=e; console.warn(label+" fetch failed "+u, e); }
+  }
+  throw lastErr || new Error(label+" all urls failed");
+}
+async function loadCascade(urls, filename){
+  const buf = await fetchWithFallback(urls, filename);
+  const data = new Uint8Array(buf);
+  cv.FS_createDataFile('/', filename, data, true, false, false);
+  return filename;
+}
+
+// Real init — called when Module.onRuntimeInitialized fires (defined in <head>)
+async function initCv2(){
+  if(cvReady) return;
+  try{
+    if(typeof cv==='undefined' || !cv.Mat) throw new Error("cv not ready");
+    cvReady=true;
+    setStatus("⏳ cv2 ready — loading eye cascade <code>haarcascade_eye.xml</code>…");
+    eyeCascade = new cv.CascadeClassifier();
+    faceCascade = new cv.CascadeClassifier();
+    await loadCascade(CASCADE_URLS.eye, "haarcascade_eye.xml");
+    await loadCascade(CASCADE_URLS.face, "haarcascade_frontalface_default.xml");
+    const eyeOk = eyeCascade.load("haarcascade_eye.xml");
+    const faceOk = faceCascade.load("haarcascade_frontalface_default.xml");
+    eyeReady = eyeOk; faceReady = faceOk;
+    console.log("Cascades loaded", {eyeOk,faceOk});
+    if(!eyeOk) throw new Error("eye cascade load failed");
+    setStatus(`✅ <strong>cv2 ready</strong> — ${faceOk? "face+eye":"eye"} cascade. YOLO <code>best.pt</code> → <code>cv.CascadeClassifier</code>. <span style="color:#00ff88;">Click Start Camera</span> or it auto-starts.`);
+    badgeLive.textContent="● cv2 READY";
+    badgeLive.style.background="rgba(0,255,136,0.14)"; badgeLive.style.borderColor="rgba(0,255,136,0.3)"; badgeLive.style.color="#00ff88";
+    // if camera already running, detection will auto-enable on next loop — else auto-start camera for instant UX like Python (which auto-opens window)
+    if(!running && !new URLSearchParams(location.search).has('noautoplay')){
+      // don't auto-play if user hasn't interacted? Try but catch autoplay block
+      setTimeout(()=>{ if(!running) startCam().catch(()=>{}); }, 400);
+    }
+    if(new URLSearchParams(location.search).has('autoplay')) startCam();
+  }catch(e){
+    console.error("initCv2 failed",e);
+    // Keep Start button enabled — camera works, detection just disabled; show fallback hint
+    badgeLive.textContent="● cv2 FALLBACK";
+    badgeLive.style.background="rgba(255,193,7,0.18)"; badgeLive.style.borderColor="rgba(255,193,7,0.35)"; badgeLive.style.color="#ffd54f";
+    setStatus(`⚠️ cv2 cascade failed: ${e.message}<br>Camera still works — detection uses <code>MediaPipe fallback</code>. <a href="javascript:location.reload()" style="color:#88ddff;">Reload</a> • Gallery works.`);
+  }
+}
+
+// Hook into pre-defined Module callback
+if(window._cvRuntimeReady){
+  initCv2();
+} else {
+  window._onCvRuntime = initCv2;
+}
+// Also watch for late load (if Module defined after opencv somehow)
+let _cvWatch = setInterval(()=>{
+  if(typeof cv!=='undefined' && cv.Mat && !cvReady){
+    if(window._cvRuntimeReady) { clearInterval(_cvWatch); initCv2(); }
+    // also if cv.FS exists and Module not yet fired, try anyway after 2s
+  }
+  if(cvReady) clearInterval(_cvWatch);
+}, 500);
+// Progress hint while loading (since opencv.js is ~8 MB)
+let _loadStart = Date.now();
+let _progIv = setInterval(()=>{
+  if(cvReady){ clearInterval(_progIv); return; }
+  const el = Date.now() - _loadStart;
+  const pct = Math.min(95, Math.floor((el/6000)*100));
+  const progEl = document.getElementById('cv-progress');
+  if(progEl) progEl.textContent = pct + "%";
+  if(el>8000 && typeof cv==='undefined'){
+    if(progEl) progEl.textContent="retrying CDN…";
+  }
+}, 400);
+setTimeout(()=>{
+  if(!cvReady && typeof cv==='undefined'){
+    setStatus(`⏳ OpenCV.js still loading… Check ad-block / network. <a href="https://cdn.jsdelivr.net/npm/@opencv/opencv-js@4.8.0/opencv.js" target="_blank" style="color:#88ddff;">alt CDN</a><br><span style="font-size:0.7rem;">Camera button is ENABLED — you can start now, detection activates when cv2 loads. Gallery is instant.</span>`);
+    // enable button anyway
+    if(btnStart) btnStart.disabled=false;
+  }
+}, 5000);
+
+/* ═══════════════════════════════════════════
+   CAMERA + MAIN LOOP — mirrors python while True:
+     ret, frame=cap.read()
+     results=model(frame,imgsz=640)
+     for result in boxes: overlay
+     blink detection
+     cv2.imshow ; waitKey
+   ═══════════════════════════════════════════ */
+async function startCam(){
+  if(running) return;
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" }, audio:false });
+    video.srcObject=stream; capStream=stream;
+    await video.play();
+    // size canvases to video
+    const w=video.videoWidth||640, h=video.videoHeight||480;
+    canvas.width=w; canvas.height=h; dbgCanvas.width=w; dbgCanvas.height=h;
+    // hide status after a sec
+    setTimeout(()=>{ if(running) setStatus(""); }, 1200);
+    setStatus("✅ Camera started — <code>cv2.VideoCapture(0)</code> active. Show eyes, blink to cycle.<br><span style='font-size:0.7rem;'>Press Q to stop • Debug toggle draws <code>cv2.rectangle</code> boxes</span>");
+    running=true; btnStart.disabled=true; btnStop.disabled=false;
+    badgeLive.textContent="● LIVE — cv2 running"; badgeLive.style.background="rgba(255,26,26,0.18)"; badgeLive.style.borderColor="rgba(255,26,26,0.35)"; badgeLive.style.color="#ff6b6b";
+    const ph=document.getElementById('cv-placeholder'); if(ph) ph.style.display='none';
+    // initial audio? python doesn't auto-play until first blink, so we wait
+    last_transition_time = performance.now()/1000;
+    eyes_were_open=true; consecutive_closed_frames=0;
+    requestAnimationFrame(loop);
+  }catch(e){
+    console.error(e);
+    setStatus(`❌ Camera blocked: ${e.message}<br>Allow camera + use HTTPS (localhost OK). Gallery still works.`);
+  }
+}
+function stopCam(){
+  running=false; if(rafId) cancelAnimationFrame(rafId); rafId=null;
+  if(capStream){ capStream.getTracks().forEach(t=>t.stop()); capStream=null; }
+  video.srcObject=null;
+  btnStart.disabled=false; btnStop.disabled=true;
+  badgeLive.textContent="● STOPPED"; badgeLive.style.background="rgba(255,255,255,0.08)";
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  dbgCtx.clearRect(0,0,dbgCanvas.width,dbgCanvas.height);
+  lastIrisRects=[];
+  const ph2=document.getElementById('cv-placeholder'); if(ph2) ph2.style.display='flex';
+  setStatus("⏹ Stopped — like <code>cap.release(); cv2.destroyAllWindows()</code>. Press Start to resume.");
+  metaDetected.textContent="—"; metaOpen.textContent="—"; metaClosed.textContent="0"; metaRot.textContent="—"; metaCooldown.textContent="—";
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.key.toLowerCase()==='q'){ stopCam(); }
+  if(e.key==='ArrowRight'){ manualNext(); }
+  if(e.key==='ArrowLeft'){ manualPrev(); }
+});
+
+// Hidden helper canvas to get ImageData for cv.Mat
+const helper=document.createElement('canvas');
+const helperCtx=helper.getContext('2d', {willReadFrequently:true});
+
+function eyeRectToIris(eye, gray){
+  // Refine Haar eye box (white-to-white) to true iris/pupil circle
+  // Returns iris square {x,y,width,height, cx, cy, r} aligned to pupil center
+  try{
+    const x = Math.max(0, Math.min(eye.x, gray.cols-10));
+    const y = Math.max(0, Math.min(eye.y, gray.rows-10));
+    const w = Math.max(16, Math.min(eye.width, gray.cols - x));
+    const h = Math.max(16, Math.min(eye.height, gray.rows - y));
+    if(w<14 || h<14) return null;
+    const roiRect = new cv.Rect(x,y,w,h);
+    const roi = gray.roi(roiRect);
+    const blurred = new cv.Mat();
+    // Use median + gaussian to isolate dark pupil under varied light (fixes your dark indoor shot)
+    cv.medianBlur(roi, blurred, 5);
+    cv.GaussianBlur(blurred, blurred, new cv.Size(7,7), 0);
+    // 1) Try HoughCircles on the small eye patch — most accurate for iris
+    const circles = new cv.Mat();
+    const minR = Math.max(6, Math.floor(Math.min(w,h)*0.18));
+    const maxR = Math.max(10, Math.floor(Math.min(w,h)*0.25));
+    // param1 Canny high thr, param2 accumulator thr — tuned for dark pupil on eye whites
+    cv.HoughCircles(blurred, circles, cv.HOUGH_GRADIENT, 1, Math.max(w,h)/2.2, 80, 14, minR, maxR);
+    if(circles.cols>0){
+      // pick strongest circle (first)
+      const c = circles.data32F; // Float32Array [x,y,r,...]
+      let cx = c[0], cy = c[1], r = c[2];
+      // sanity: pupil should be near eye center, not at extreme edge
+      if(Math.abs(cx - w/2) < w*0.42 && Math.abs(cy - h/2) < h*0.45){
+        roi.delete(); blurred.delete(); circles.delete();
+        r = Math.max(minR, Math.min(r, maxR));
+        // iris rect square around pupil — aligned to real iris, not Haar box
+        return {
+          x: Math.round(x + cx - r),
+          y: Math.round(y + cy - r),
+          width: Math.round(r*2),
+          height: Math.round(r*2),
+          cx: Math.round(x + cx),
+          cy: Math.round(y + cy),
+          r: Math.round(r),
+          eyeX: x, eyeY: y, eyeW: w, eyeH: h,
+          isIris: true
+        };
+      }
+      // if off-center, fall through to threshold method
+    }
+    circles.delete();
+    // 2) Fallback: threshold darkest 15% → contour → centroid (works when Hough fails in low light)
+    const thresh = new cv.Mat();
+    const dark = new cv.Mat();
+    // Otsu threshold on blurred ROI — pupil is darkest mass
+    cv.threshold(blurred, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+    // clean small speckle
+    const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3,3));
+    cv.morphologyEx(thresh, thresh, cv.MORPH_OPEN, kernel);
+    kernel.delete();
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    let best = null, bestArea=0;
+    for(let i=0;i<contours.size();i++){
+      const c = contours.get(i);
+      const area = cv.contourArea(c);
+      // pupil area should be 4%-25% of eye patch
+      const eyeArea = w*h;
+      if(area < eyeArea*0.04 || area > eyeArea*0.25) continue;
+      const m = cv.moments(c);
+      if(m.m00===0) continue;
+      // circularity check: 4π area / perimeter² ≈ 1 for circle
+      const peri = cv.arcLength(c, true);
+      const circ = 4*Math.PI*area/(peri*peri);
+      if(circ < 0.38) continue; // not round enough
+      if(area>bestArea){ bestArea=area; best=c; }
+    }
+    if(best){
+      const m = cv.moments(best);
+      const cx = m.m10/m.m00, cy = m.m01/m.m00;
+      const area = bestArea;
+      const r = Math.sqrt(area/Math.PI);
+      roi.delete(); blurred.delete(); thresh.delete(); dark.delete(); contours.delete(); hierarchy.delete();
+      return {
+        x: Math.round(x + cx - r),
+        y: Math.round(y + cy - r),
+        width: Math.round(r*2),
+        height: Math.round(r*2),
+        cx: Math.round(x + cx),
+        cy: Math.round(y + cy),
+        r: Math.round(r),
+        eyeX: x, eyeY: y, eyeW: w, eyeH: h,
+        isIris: true
+      };
+    }
+    roi.delete(); blurred.delete(); thresh.delete(); dark.delete(); contours.delete(); hierarchy.delete();
+  }catch(e){ console.warn("iris refine err",e); }
+  // 3) Ultimate fallback: geometric estimate from Haar box — iris ≈ 0.22*eyeWidth, centered slightly up
+  const estR = Math.max(10, Math.round(Math.min(eye.width, eye.height)*0.22));
+  const cx = Math.round(eye.x + eye.width*0.50);
+  const cy = Math.round(eye.y + eye.height*0.50 + eye.height*0.06); // slight low center matches real pupil
+  return {
+    x: cx - estR, y: cy - estR, width: estR*2, height: estR*2,
+    cx, cy, r: estR,
+    eyeX: eye.x, eyeY: eye.y, eyeW: eye.width, eyeH: eye.height,
+    isIris: false
+  };
+}
+
+function detectEyesCV2(){
+  // Returns iris-aligned squares {x,y,width,height,cx,cy,r} — REAL alignment, not Haar box
+  const w=canvas.width, h=canvas.height;
+  helper.width=w; helper.height=h;
+  helperCtx.drawImage(video, 0,0,w,h);
+  const imgData = helperCtx.getImageData(0,0,w,h);
+  let src = cv.matFromImageData(imgData);
+  let gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+  cv.equalizeHist(gray, gray);
+  let eyeRects=[];
+  try{
+    if(faceReady && eyeCascade){
+      let faces = new cv.RectVector();
+      faceCascade.detectMultiScale(gray, faces, 1.1, 3, 0, new cv.Size(80,80));
+      for(let i=0;i<faces.size();i++){
+        let face = faces.get(i);
+        let faceRoi = gray.roi(face);
+        let eyes = new cv.RectVector();
+        eyeCascade.detectMultiScale(faceRoi, eyes, 1.1, 4, 0, new cv.Size(22,22), new cv.Size(110,110));
+        for(let j=0;j<eyes.size();j++){
+          let e = eyes.get(j);
+          if(e.y + e.height/2 > face.height*0.62) continue;
+          if(e.width < face.width*0.12 || e.width > face.width*0.45) continue;
+          eyeRects.push({ x: face.x+e.x, y: face.y+e.y, width:e.width, height:e.height });
+        }
+        eyes.delete(); faceRoi.delete();
+      }
+      faces.delete();
+      if(eyeRects.length===0 && eyeReady){
+        let eyes2=new cv.RectVector();
+        eyeCascade.detectMultiScale(gray, eyes2, 1.1, 4, 0, new cv.Size(28,28));
+        for(let i=0;i<eyes2.size();i++){
+          let e=eyes2.get(i);
+          if(e.width> w*0.35) continue;
+          eyeRects.push({x:e.x,y:e.y,width:e.width,height:e.height});
+        }
+        eyes2.delete();
+      }
+    } else if(eyeReady){
+      let eyes=new cv.RectVector();
+      eyeCascade.detectMultiScale(gray, eyes, 1.1, 4, 0, new cv.Size(30,30));
+      for(let i=0;i<eyes.size();i++){ let e=eyes.get(i); eyeRects.push({x:e.x,y:e.y,width:e.width,height:e.height}); }
+      eyes.delete();
+    }
+  }catch(e){ console.warn("detect err",e); }
+  // NMS
+  if(eyeRects.length>4){
+    eyeRects.sort((a,b)=> b.width*b.height - a.width*a.height);
+    eyeRects=eyeRects.slice(0,4);
+  }
+  let filtered=[];
+  for(let r of eyeRects){
+    let keep=true;
+    for(let f of filtered){
+      const interX=Math.max(0, Math.min(r.x+r.width, f.x+f.width)-Math.max(r.x,f.x));
+      const interY=Math.max(0, Math.min(r.y+r.height, f.y+f.height)-Math.max(r.y,f.y));
+      const inter=interX*interY;
+      const union=r.width*r.height + f.width*f.height - inter;
+      if(inter/union > 0.3) { keep=false; break; }
+    }
+    if(keep) filtered.push(r);
+  }
+  eyeRects=filtered;
+  if(eyeRects.length>2) eyeRects=eyeRects.slice(0,2);
+  // Sort left-to-right so eyes stay stable
+  eyeRects.sort((a,b)=> a.x - b.x);
+  // Refine each Haar eye box to true iris center + radius (REAL alignment)
+  let irisRects = eyeRects.map(e => eyeRectToIris(e, gray)).filter(Boolean);
+  src.delete(); gray.delete();
+  // Temporal smoothing — lerp to previous frame so sharingan doesn't jitter (looks glued to eye)
+  irisRects = irisRects.map((cur, i)=>{
+    const prev = lastIrisRects[i];
+    if(prev && Math.hypot(cur.cx - prev.cx, cur.cy - prev.cy) < cur.r*1.6){
+      const a = 0.55; // smoothing factor — higher = more stable, lower = more responsive
+      const cx = Math.round(prev.cx * (1-a) + cur.cx * a);
+      const cy = Math.round(prev.cy * (1-a) + cur.cy * a);
+      const r = Math.round(prev.r * (1-a) + cur.r * a);
+      return { ...cur, x: cx - r, y: cy - r, width: r*2, height: r*2, cx, cy, r };
+    }
+    return cur;
+  });
+  lastIrisRects = irisRects;
+  return irisRects;
+}
+
+function loop(){
+  if(!running) return;
+  rafId = requestAnimationFrame(loop);
+  const now = performance.now()/1000;
+  const w=canvas.width, h=canvas.height;
+  // Draw video frame to canvas (mirrors cv2 frame)
+  ctx.save();
+  // We already set canvas transform scaleX(-1) via CSS; here we draw unmirrored but canvas itself mirrored => we draw normally and CSS mirrors display.
+  // To make debug coords align, we draw video directly (not mirrored) and let CSS mirror final canvas.
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(video, 0,0,w,h);
+  ctx.restore();
+
+  // Update rotation logic — mirrors python:
+  // if is_rotating: elapsed = now - rotation_start_time; if elapsed < 2.4: angle=720*elapsed%360 else is_rotating=False
+  if(is_rotating){
+    const elapsed = now - rotation_start_time;
+    if(elapsed < rotation_duration){
+      current_angle = (rotation_speed * elapsed) % 360;
+    } else {
+      is_rotating=false; current_angle=0;
+    }
+    metaRot.textContent = is_rotating? `${current_angle.toFixed(0)}°` : "idle";
+  } else {
+    metaRot.textContent="idle";
+  }
+  const cooldownLeft = Math.max(0, transition_cooldown - (now - last_transition_time));
+  metaCooldown.textContent = cooldownLeft>0.01? `${cooldownLeft.toFixed(2)}s` : "ready";
+
+  // Detect — mirrors model(frame, imgsz=640)
+  let rects=[];
+  if(cvReady && eyeReady){
+    rects = detectEyesCV2();
+  } else {
+    // fallback simple center eye boxes for demo if cv not ready (so overlay still shows)
+    rects=[];
+  }
+
+  let eyes_open = rects.length > 0;
+  // Confidence threshold >0.5 equivalent: we already filtered; assume all kept are >0.5
+  // Blink detection — mirrors python exactly
+  if(eyes_open){
+    if(!eyes_were_open){
+      if(consecutive_closed_frames >= CLOSED_FRAMES_THRESHOLD){
+        try_transition();
+      }
+    }
+    consecutive_closed_frames=0;
+  } else {
+    consecutive_closed_frames += 1;
+  }
+  eyes_were_open = eyes_open;
+
+  metaDetected.textContent = rects.length;
+  metaOpen.textContent = eyes_open? "OPEN":"CLOSED";
+  metaClosed.textContent = consecutive_closed_frames;
+  badgeEyes.textContent = `👁️ Eyes: ${eyes_open? "OPEN":"CLOSED"} (${rects.length})`;
+  badgeEyes.style.background = eyes_open? "rgba(0,255,136,0.14)":"rgba(255,193,7,0.14)";
+  badgeEyes.style.color = eyes_open? "#00ff88":"#ffd54f";
+  badgeEyes.style.borderColor = eyes_open? "rgba(0,255,136,0.3)":"rgba(255,193,7,0.3)";
+
+  // Debug: eye box (dashed white) + iris circle (green) — shows REAL alignment
+  dbgCtx.clearRect(0,0,w,h);
+  if(showDebug && rects.length){
+    dbgCtx.save();
+    rects.forEach(r=>{
+      // Haar eye box (white dashed)
+      if(r.eyeW){
+        dbgCtx.strokeStyle="rgba(255,255,255,0.6)"; dbgCtx.lineWidth=1; dbgCtx.setLineDash([4,4]);
+        dbgCtx.strokeRect(r.eyeX, r.eyeY, r.eyeW, r.eyeH);
+      }
+      // iris square (yellow dashed)
+      dbgCtx.strokeStyle="rgba(255,215,0,0.9)"; dbgCtx.lineWidth=1; dbgCtx.setLineDash([6,3]);
+      dbgCtx.strokeRect(r.x, r.y, r.width, r.height);
+      // iris circle (green solid — true pupil)
+      dbgCtx.strokeStyle="#00ff88"; dbgCtx.lineWidth=2; dbgCtx.setLineDash([]);
+      dbgCtx.beginPath(); dbgCtx.arc(r.cx, r.cy, r.r, 0, Math.PI*2); dbgCtx.stroke();
+      // center dot
+      dbgCtx.fillStyle="#00ff88"; dbgCtx.beginPath(); dbgCtx.arc(r.cx, r.cy, 2, 0, Math.PI*2); dbgCtx.fill();
+      dbgCtx.fillStyle="#00ff88"; dbgCtx.font="10px monospace"; dbgCtx.fillText(`${r.isIris?'IRIS':'EST'} r=${r.r}`, r.x, r.y-6);
+    });
+    dbgCtx.restore();
+  }
+
+  // Overlay Sharingan — iris-aligned + circular clip (looks glued to real eye, not floating)
+  // Mirrors python: cv2.resize + alpha 0.7 + blend, but centered on pupil (cx,cy) and clipped to iris circle
+  const img = sharinganImgs[current_index];
+  if(img && img.complete && rects.length){
+    for(let r of rects){
+      // r is iris square (diameter = 2*r.r) — already pupil-centered. Scale by slider like python scaling_factor.
+      const baseD = r.width; // = 2*r.r, iris diameter
+      const scaledD = Math.max(12, Math.floor(baseD * scaling_factor));
+      const cx = r.cx;
+      const cy = r.cy;
+      // Slight vertical nudge for natural eye perspective: iris sits a touch above eye center
+      const drawCx = cx;
+      const drawCy = cy;
+      ctx.save();
+      ctx.globalAlpha = 0.92; // stronger than 0.7 for vivid sharingan, yet preserves eye texture
+      ctx.translate(drawCx, drawCy);
+      if(is_rotating || current_angle!==0){
+        ctx.rotate(current_angle * Math.PI/180);
+      }
+      // Clip to iris circle so sharingan never spills onto whites (REAL look)
+      ctx.beginPath();
+      ctx.arc(0, 0, scaledD/2, 0, Math.PI*2);
+      ctx.clip();
+      // Subtle darkening underneath for depth (like contact lens)
+      ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(-scaledD/2, -scaledD/2, scaledD, scaledD);
+      if(img.naturalWidth){
+        ctx.drawImage(img, -scaledD/2, -scaledD/2, scaledD, scaledD);
+      } else {
+        ctx.fillStyle="#ff1a1a"; ctx.beginPath(); ctx.arc(0,0, scaledD/2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle="#fff"; ctx.font=`${scaledD*0.3}px serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("👁️",0,0);
+      }
+      ctx.restore();
+      // outer iris ring for realism (thin dark border)
+      ctx.save();
+      ctx.strokeStyle="rgba(0,0,0,0.45)"; ctx.lineWidth=Math.max(1, scaledD*0.04);
+      ctx.beginPath(); ctx.arc(drawCx, drawCy, scaledD/2, 0, Math.PI*2); ctx.stroke();
+      // inner highlight
+      ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(drawCx, drawCy, scaledD*0.48, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Small status hint for blink
+  if(!eyes_open && consecutive_closed_frames===1){
+    // just closed
+  }
+}
+
+/* ═══════════════════════════════════════════
+   GALLERY — kept from original sharingan.html
+   Supports voice saying number like before
+   ═══════════════════════════════════════════ */
+let eyeCount=0;
+function changeCount(delta){
+  eyeCount = Math.max(1, Math.min(10, eyeCount+delta));
+  document.getElementById('eyeCountDisplay').textContent=eyeCount;
+  const d=document.getElementById('eyeCountDisplay'); d.style.transform='scale(1.3)'; setTimeout(()=>d.style.transform='scale(1)',150);
+}
+function activateSharingan(){
+  if(eyeCount===0){ eyeCount=1; document.getElementById('eyeCountDisplay').textContent=1; }
+  const grid=document.getElementById('eyeGrid'); grid.innerHTML='';
+  const flash=document.createElement('div'); flash.style.cssText='position:fixed;inset:0;z-index:9999;background:var(--sharingan-red);opacity:0;pointer-events:none;'; document.body.appendChild(flash);
+  flash.animate([{opacity:0},{opacity:0.6, offset:0.15},{opacity:0}],{duration:500, easing:'ease-out'}); setTimeout(()=>flash.remove(),500);
+  try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const osc=ac.createOscillator(),gain=ac.createGain(); osc.connect(gain); gain.connect(ac.destination); osc.type='sine'; osc.frequency.setValueAtTime(1200,ac.currentTime); osc.frequency.exponentialRampToValueAtTime(100,ac.currentTime+0.5); gain.gain.setValueAtTime(0.12,ac.currentTime); gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.6); osc.start(); osc.stop(ac.currentTime+0.6);}catch(e){}
+  for(let i=0;i<eyeCount;i++){
+    const info=EYE_DATA[i % EYE_DATA.length]; const card=document.createElement('div'); card.className='eye-card'; card.style.animationDelay=(i*0.12)+'s';
+    const img=document.createElement('img'); img.src=SHARINGAN_ASSETS+info.file; img.alt=info.name; img.loading='lazy';
+    const tag=document.createElement('span'); tag.className='eye-name-tag'; tag.textContent=info.name;
+    card.appendChild(img); card.appendChild(tag);
+    card.addEventListener('click',()=> playEyeAudio(i,card));
+    grid.appendChild(card);
+  }
+}
+(function initVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const statusEl2=document.getElementById('voiceStatusText');
+  if(!SR){ if(statusEl2) statusEl2.textContent="⚠️ Voice needs Chrome + HTTPS — use buttons"; return; }
+  const rec=new SR(); rec.continuous=true; rec.interimResults=false; rec.lang="en-US";
+  const wordMap={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,"1":1,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10};
+  rec.onresult=(e)=>{
+    const t=e.results[e.results.length-1][0].transcript.toLowerCase().trim();
+    if(statusEl2) statusEl2.textContent=`🎤 Heard: "${t}"`;
+    for(let w in wordMap){ if(t.includes(w)){ eyeCount=wordMap[w]; document.getElementById('eyeCountDisplay').textContent=eyeCount; if(statusEl2) statusEl2.textContent=`✓ Detected ${wordMap[w]} — awakening!`; activateSharingan(); switchTab('gallery'); setTimeout(()=>{ if(statusEl2) statusEl2.textContent=`🎤 Say another number...`; },2000); return; } }
+    const m=t.match(/(\d+)/); if(m){ const v=parseInt(m[1]); if(v>=1&&v<=10){ eyeCount=v; document.getElementById('eyeCountDisplay').textContent=v; if(statusEl2) statusEl2.textContent=`✓ Detected ${v} — awakening!`; activateSharingan(); switchTab('gallery'); } }
+  };
+  rec.onerror=(e)=>{ if(statusEl2) statusEl2.textContent=`⚠️ Mic error: ${e.error} — use buttons`; };
+  rec.onend=()=>{ try{ rec.start(); }catch(_){} };
+  try{ rec.start(); if(statusEl2) statusEl2.textContent="🎤 Listening... say “three” or “seven”"; }catch(e){ if(statusEl2) statusEl2.textContent="⚠️ Click to enable mic"; document.addEventListener('click', ()=>{ try{rec.start();}catch(_){} }, {once:true}); }
+  const params=new URLSearchParams(location.search); const ep=params.get('eyes'); if(ep){ const v=parseInt(ep); if(v>=1&&v<=10){ eyeCount=v; document.getElementById('eyeCountDisplay').textContent=v; setTimeout(()=>{ switchTab('gallery'); activateSharingan(); },800); } }
+})();
+function playEyeAudio(index, card){
+  const info=EYE_DATA[index % EYE_DATA.length]; const indicator=document.getElementById('audioIndicator');
+  if(currentAudio){ try{ currentAudio.pause(); currentAudio.currentTime=0; }catch(e){} }
+  document.querySelectorAll('.eye-card').forEach(c=>c.classList.remove('playing'));
+  card.classList.add('playing'); indicator.textContent=`🔊 ${info.name}`; indicator.classList.add('visible');
+  const a=new Audio(AUDIO_ASSETS+info.audio); currentAudio=a; a.volume=0.7; a.play().catch(e=>console.warn(e));
+  a.addEventListener('ended',()=>{ card.classList.remove('playing'); indicator.classList.remove('visible'); currentAudio=null; });
+}
+
+/* Particle background (red) */
+const pCanvas=document.getElementById('particles-canvas');
+const pCtx=pCanvas.getContext('2d');
+let particles=[]; const P_COUNT=60;
+function resizeP(){ pCanvas.width=window.innerWidth; pCanvas.height=window.innerHeight; }
+window.addEventListener('resize',resizeP); resizeP();
+class RedParticle{ constructor(){ this.reset(); } reset(){ this.x=Math.random()*pCanvas.width; this.y=Math.random()*pCanvas.height; this.vx=(Math.random()-0.5)*0.3; this.vy=(Math.random()-0.5)*0.3-0.1; this.radius=Math.random()*2+0.5; this.alpha=Math.random()*0.4+0.1; this.color=['rgba(255,26,26,','rgba(255,100,0,','rgba(200,0,0,'][Math.floor(Math.random()*3)]; this.pulse=Math.random()*Math.PI*2; this.pulseSpeed=Math.random()*0.02+0.01; } update(){ this.x+=this.vx; this.y+=this.vy; this.pulse+=this.pulseSpeed; if(this.x<0||this.x>pCanvas.width||this.y<0||this.y>pCanvas.height){ this.reset(); this.y=pCanvas.height+10; } } draw(){ const a=this.alpha*(0.6+0.4*Math.sin(this.pulse)); pCtx.beginPath(); pCtx.arc(this.x,this.y,this.radius,0,Math.PI*2); pCtx.fillStyle=this.color+a+')'; pCtx.fill(); pCtx.beginPath(); pCtx.arc(this.x,this.y,this.radius*3,0,Math.PI*2); pCtx.fillStyle=this.color+(a*0.12)+')'; pCtx.fill(); } }
+for(let i=0;i<P_COUNT;i++) particles.push(new RedParticle());
+function animP(){ pCtx.clearRect(0,0,pCanvas.width,pCanvas.height); particles.forEach(p=>{ p.update(); p.draw(); }); for(let i=0;i<particles.length;i++) for(let j=i+1;j<particles.length;j++){ const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<100){ pCtx.beginPath(); pCtx.moveTo(particles[i].x,particles[i].y); pCtx.lineTo(particles[j].x,particles[j].y); pCtx.strokeStyle=`rgba(255,50,50,${(1-dist/100)*0.06})`; pCtx.lineWidth=0.5; pCtx.stroke(); } } requestAnimationFrame(animP); }
+animP();
+
+// Module handler already set in <head>; no extra load listeners needed.
+// Keep a tiny fallback for browsers where script loaded from cache before Module defined:
+setTimeout(()=>{
+  if(!cvReady && typeof cv!=='undefined' && cv.Mat && window._cvRuntimeReady) initCv2();
+}, 1200);
+</script>
+</body>
+</html>
