@@ -1,0 +1,261 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500;700;900&display=swap');
+
+:root {
+    --color-primary: #ff9432;
+    --color-secondary: #424652;
+    --color-text: #fff;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Lato', system-ui, sans-serif;
+    user-select: none;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 100vh;
+    background: var(--color-secondary);
+    color: var(--color-text);
+}
+
+/* FIXED DIAGONAL BACKGROUND - covers whole page even when scrolling */
+#background {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(148deg, var(--color-primary) 0%, var(--color-primary) 46%, var(--color-secondary) 46%, var(--color-secondary) 100%);
+}
+
+/* CAMERA HERO - full viewport, centered */
+#content-container {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 24px 48px;
+}
+
+#image-canvas,
+#webcam-container,
+#loading-circle,
+#finished-jutsu-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#webcam-container {
+    display: flex;
+    border-radius: 50%;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 1s ease-in;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 0 0 6px rgba(255,255,255,0.18);
+}
+
+#webcam-container video,
+#webcam-container canvas {
+    display: block;
+    border-radius: 50%;
+}
+
+#label-container {
+    position: absolute;
+    top: 9%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text);
+    font-size: clamp(1.6em, 4vw, 2.6em);
+    font-weight: 700;
+    text-align: center;
+    z-index: 1;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 18px rgba(0,0,0,0.35);
+    padding: 0 16px;
+    width: max-content;
+    max-width: 90vw;
+}
+
+#loading-circle {
+    width: 420px;
+    height: 420px;
+    max-width: 86vw;
+    max-height: 86vw;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid rgba(255,255,255,0.22);
+    background: rgba(255,255,255,0.04);
+}
+
+#past-labels {
+    position: absolute;
+    top: 90%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text);
+    font-size: 1.15em;
+    display: flex;
+    flex-direction: row;
+    gap: 0.6em;
+    flex-wrap: wrap;
+    justify-content: center;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+    width: max-content;
+    max-width: 90vw;
+}
+
+#past-labels div {
+    background: rgba(0,0,0,0.32);
+    padding: 0.28em 0.7em;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+}
+
+/* JUTSU PREVIEW IMAGE - sits beside the loading circle */
+#jutsu-preview {
+    position: absolute;
+    top: 50%;
+    left: calc(50% + 240px);
+    transform: translateY(-50%);
+    width: 180px;
+    max-width: 42vw;
+    height: auto;
+    border-radius: 16px;
+    border: 3px solid rgba(255,255,255,0.55);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    display: none;
+    z-index: 3;
+    background: rgba(255,255,255,0.08);
+}
+
+/* LAST PERFORMED JUTSU PANEL */
+#last-jutsu-panel {
+    position: absolute;
+    top: calc(50% + 244px);
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: var(--color-text);
+    z-index: 3;
+    width: max-content;
+    max-width: 92vw;
+}
+
+#last-jutsu-panel .last-jutsu-text {
+    font-size: 1.05em;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.4);
+}
+
+#last-jutsu-panel #last-jutsu-name {
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+#last-jutsu-panel .last-jutsu-signs {
+    font-size: 0.92em;
+    opacity: 0.9;
+    margin-top: 4px;
+    min-height: 1.2em;
+}
+
+#reset-jutsu-btn {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.35);
+    color: var(--color-text);
+    border: 1px solid rgba(255,255,255,0.4);
+    padding: 0.4em 1.1em;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.15s, transform 0.15s;
+}
+
+#reset-jutsu-btn:hover {
+    background: rgba(0,0,0,0.55);
+    transform: scale(1.04);
+}
+
+#finished-jutsu-container {
+    color: var(--color-text);
+    font-size: clamp(1.8em, 5vw, 2.6em);
+    font-weight: 900;
+    text-align: center;
+    z-index: 2;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 0 18px rgba(255, 255, 255, 0.9), 0 0 40px currentColor;
+    animation: jutsu-pop 0.4s ease-out;
+    padding: 0 16px;
+}
+
+/* FLASH EFFECT RIGHT BEFORE TELEPORTING TO THE JUTSU PAGE */
+#finished-jutsu-container.jutsu-flash {
+    animation: jutsu-flash 0.12s linear infinite;
+}
+
+@keyframes jutsu-pop {
+    from {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 0;
+    }
+
+    to {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes jutsu-flash {
+
+    0%,
+    100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+
+    50% {
+        opacity: 0.35;
+        filter: brightness(3);
+    }
+}
+
+/* RESPONSIVE CAMERA */
+@media (max-width: 900px) {
+    #jutsu-preview {
+        left: 50%;
+        top: auto;
+        bottom: 6%;
+        transform: translateX(-50%);
+    }
+
+    #last-jutsu-panel {
+        top: auto;
+        bottom: 0;
+    }
+}
+
+@media (max-width: 500px) {
+    #content-container {
+        padding: 48px 16px 32px;
+        min-height: 88vh;
+    }
+
+    #label-container {
+        top: 7%;
+    }
+}

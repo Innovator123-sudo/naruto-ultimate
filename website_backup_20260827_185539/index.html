@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/modal.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/img/konoha.png">
+    <title>Naruto Jutsu Recognition</title>
+    <script>
+      // Embedded fallback for file:// — same 14 CUSTOM jutsus as main.html
+      window.EMBEDDED_JUTSUS = {
+        "Shadow Clone Jutsu": { "signs": ["Tora", "Saru", "Uma", "I", "Release"], "page": "jutsus/shadow-clone.html", "element": "shadow" },
+        "Rasengan Jutsu": { "signs": ["Ushi", "Tora", "U", "Inu", "I"], "page": "jutsus/rasengan.html", "element": "wind" },
+        "Chidori Jutsu": { "signs": ["Tori", "U", "Tatsu", "Inu", "Tora"], "page": "jutsus/chidori.html", "element": "lightning" },
+        "Sharingan Jutsu": { "signs": ["Mi", "Tori", "Ushi", "Uma", "I"], "page": "jutsus/sharingan.html", "element": "eye" },
+        "Fire Ball Jutsu": { "signs": ["Ne", "Tora", "Tatsu", "Mi", "Tori", "Tora"], "page": "jutsus/fireball.html", "element": "fire" },
+        "Water Dragon Jutsu": { "signs": ["Uma", "Mi", "Inu", "Tatsu", "Release"], "page": "jutsus/water-dragon.html", "element": "water" },
+        "Earth Wall Jutsu": { "signs": ["Saru", "Ne", "Tatsu", "Ushi", "Tora"], "page": "jutsus/earth-wall.html", "element": "earth" },
+        "Summoning Jutsu": { "signs": ["I", "Tori", "Saru", "Uma"], "page": "jutsus/summoning.html", "element": "summon" },
+        "Thunderstorm Jutsu": { "signs": ["Uma", "Tora", "Mi"], "page": "jutsus/thunderstorm.html", "element": "lightning" },
+        "Magma Eruption Jutsu": { "signs": ["Tora", "Tatsu", "Ne", "Tora"], "page": "jutsus/magma.html", "element": "fire" },
+        "Sandstorm Jutsu": { "signs": ["Uma", "U", "Inu", "Saru", "Tori"], "page": "jutsus/sandstorm.html", "element": "earth" },
+        "Ice Shard Jutsu": { "signs": ["Tori", "Saru", "Mi", "Tori", "Release"], "page": "jutsus/ice-shard.html", "element": "water" },
+        "Tornado Jutsu": { "signs": ["Ushi", "U", "Inu", "Tatsu", "Tori"], "page": "jutsus/tornado.html", "element": "wind" },
+        "Fog Concealment Jutsu": { "signs": ["Tori", "Tatsu", "Mi", "Ne", "Uma"], "page": "jutsus/fog.html", "element": "water" }
+      };
+    </script>
+  </head>
+
+  <body>
+    <div id="content-container">
+
+      <!-- BACKGROUND -->
+      <div id="background"></div>
+
+      <!-- LABELS -->
+      <div id="loading-circle"></div>
+      <div id="label-container"></div>
+      <div id="finished-jutsu-container"></div>
+      <div id="past-labels"></div>
+
+      <!-- SAVE / RESET CONTROLS — previous handsign stays saved -->
+      <div id="sequence-controls" style="position:absolute; top:94%; left:50%; transform:translate(-50%,-50%); display:flex; gap:10px; z-index:12; flex-wrap:wrap; justify-content:center; width:max-content; max-width:92vw;">
+        <button id="save-sequence-btn" title="Save current handsign sequence (also auto-saves on reset)" style="background:linear-gradient(180deg,#ff6a00,#d45500); color:#fff; border:none; padding:10px 18px; border-radius:50px; font-weight:800; font-size:0.9rem; cursor:pointer; box-shadow:0 4px 16px rgba(255,106,0,0.35); display:flex; align-items:center; gap:6px;">💾 Save</button>
+        <button id="reset-sequence-btn" title="Reset current sequence (previous auto-saved)" style="background:rgba(0,0,0,0.65); color:#fff; border:1px solid rgba(255,255,255,0.25); padding:10px 18px; border-radius:50px; font-weight:700; font-size:0.9rem; cursor:pointer; backdrop-filter:blur(6px); display:flex; align-items:center; gap:6px;">🔄 Reset</button>
+        <button id="toggle-history-btn" title="View saved handsign history" style="background:rgba(255,255,255,0.92); color:#222; border:none; padding:10px 18px; border-radius:50px; font-weight:700; font-size:0.9rem; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,0.15); display:flex; align-items:center; gap:6px;">📜 History <span id="saved-count" style="background:#ff6a00; color:#fff; padding:2px 7px; border-radius:20px; font-size:0.7rem; min-width:18px; text-align:center;">0</span></button>
+      </div>
+
+      <!-- SAVED HISTORY PANEL -->
+      <div id="saved-history-panel" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(420px, 90vw); max-height:70vh; background:rgba(20,20,30,0.96); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.15); border-radius:20px; padding:20px; z-index:30; box-shadow:0 20px 60px rgba(0,0,0,0.5); overflow:hidden; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0; color:#fff; font-size:1.1rem;">📜 Saved Handsigns</h3>
+          <button onclick="document.getElementById('saved-history-panel').style.display='none'" style="background:rgba(255,255,255,0.1); border:none; color:#fff; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1.1rem;">✕</button>
+        </div>
+        <div style="font-size:0.8rem; color:#aaa; margin-bottom:12px;">Previous sequences are <b style="color:#ff6a00;">auto-saved</b> when you remove hands or press Reset. Tap <b>Restore</b> to reload. Max 10 saved.</div>
+        <div id="saved-history-list" style="overflow-y:auto; max-height:40vh; padding-right:4px;"></div>
+        <div id="saved-empty" style="text-align:center; padding:24px; color:#777; font-size:0.9rem; display:none;">No saved sequences yet — do some handsigns and press <b>Save</b> or <b>Reset</b>.</div>
+        <div style="display:flex; gap:10px; margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08);">
+          <button id="clear-history-btn" style="flex:1; background:rgba(200,30,30,0.9); color:#fff; border:none; padding:10px; border-radius:12px; font-weight:700; cursor:pointer;">🗑 Clear All</button>
+          <button onclick="document.getElementById('saved-history-panel').style.display='none'" style="flex:1; background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:12px; font-weight:700; cursor:pointer;">Close</button>
+        </div>
+      </div>
+
+      <!-- CAMERA CONTENT -->
+      <div id="webcam-container"></div>
+      <canvas id="image-canvas"></canvas>
+      <canvas id="processed-canvas" hidden></canvas>
+
+      <!-- MODAL -->
+      <button id="more-info-button">+</button>
+      <div id="info-modal" class="modal" style="display: none">
+        <div class="info-modal-content">
+          <span class="close">&times;</span>
+          <h1>Perform a jutsu to be teleported to its page!</h1>
+          <p>Every jutsu has its own custom handsign sequence. Rasengan and Chidori are NOT the same - choose wisely, shinobi.</p>
+          <div id="jutsus-container">
+            <h2>Jutsus &amp; Custom Handsigns</h2>
+            <hr />
+            <div id="jutsu-combinations"></div>
+          </div>
+          <br />
+          <div>
+            <span id="hint">Hint: &nbsp</span>
+            Position your hands into the camera and hold each handsign until the circle fills.
+            Remove your hands from the frame to reset and start over.
+            Complete a full sequence to perform the jutsu!
+          </div>
+          <br />
+          <h2>Jutsu Recognition Delay</h2>
+          <hr />
+          <div id="slider-container">
+            <input type="range" id="threshold-slider" />
+            <p>Value:&nbsp;&nbsp;<span id="threshold-value"></span></p>
+          </div>
+          <h2>Handsigns Reference</h2>
+          <hr />
+          <div id="handsigns-container">
+            <img id="handsigns-image" src="assets/img/handsigns.png" alt="all-handsigns" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORTS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <!-- SCRIPTS -->
+    <script src="assets/js/mediapipe-hand-detection.js" type="module"></script>
+    <script src="assets/js/teachable-machine.js" type="module"></script>
+    <script src="assets/js/image-processing.js" type="module"></script>
+    <script src="assets/js/main.js" type="module"></script>
+    <script src="assets/js/modal.js" type="module"></script>
+  </body>
+</html>

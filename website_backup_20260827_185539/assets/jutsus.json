@@ -1,0 +1,72 @@
+{
+  "Shadow Clone Jutsu": {
+    "signs": ["Tora", "Saru", "Uma", "I", "Release"],
+    "page": "jutsus/shadow-clone.html",
+    "element": "shadow"
+  },
+  "Rasengan Jutsu": {
+    "signs": ["Ushi", "Tora", "U", "Inu", "I"],
+    "page": "jutsus/rasengan.html",
+    "element": "wind"
+  },
+  "Chidori Jutsu": {
+    "signs": ["Tori", "U", "Tatsu", "Inu", "Tora"],
+    "page": "jutsus/chidori.html",
+    "element": "lightning"
+  },
+  "Sharingan Jutsu": {
+    "signs": ["Mi", "Tori", "Ushi", "Uma", "I"],
+    "page": "jutsus/sharingan.html",
+    "element": "eye"
+  },
+  "Fire Ball Jutsu": {
+    "signs": ["Ne", "Tora", "Tatsu", "Mi", "Tori", "Tora"],
+    "page": "jutsus/fireball.html",
+    "element": "fire"
+  },
+  "Water Dragon Jutsu": {
+    "signs": ["Uma", "Mi", "Inu", "Tatsu", "Release"],
+    "page": "jutsus/water-dragon.html",
+    "element": "water"
+  },
+  "Earth Wall Jutsu": {
+    "signs": ["Saru", "Ne", "Tatsu", "Ushi", "Tora"],
+    "page": "jutsus/earth-wall.html",
+    "element": "earth"
+  },
+  "Summoning Jutsu": {
+    "signs": ["I", "Tori", "Saru", "Uma"],
+    "page": "jutsus/summoning.html",
+    "element": "summon"
+  },
+  "Thunderstorm Jutsu": {
+    "signs": ["Uma", "Tora", "Mi"],
+    "page": "jutsus/thunderstorm.html",
+    "element": "lightning"
+  },
+  "Magma Eruption Jutsu": {
+    "signs": ["Tora", "Tatsu", "Ne", "Tora"],
+    "page": "jutsus/magma.html",
+    "element": "fire"
+  },
+  "Sandstorm Jutsu": {
+    "signs": ["Uma", "U", "Inu", "Saru", "Tori"],
+    "page": "jutsus/sandstorm.html",
+    "element": "earth"
+  },
+  "Ice Shard Jutsu": {
+    "signs": ["Tori", "Saru", "Mi", "Tori", "Release"],
+    "page": "jutsus/ice-shard.html",
+    "element": "water"
+  },
+  "Tornado Jutsu": {
+    "signs": ["Ushi", "U", "Inu", "Tatsu", "Tori"],
+    "page": "jutsus/tornado.html",
+    "element": "wind"
+  },
+  "Fog Concealment Jutsu": {
+    "signs": ["Tori", "Tatsu", "Mi", "Ne", "Uma"],
+    "page": "jutsus/fog.html",
+    "element": "water"
+  }
+}

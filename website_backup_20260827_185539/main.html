@@ -1,0 +1,301 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Naruto Hand Sign Detector â€” VGG16 + MediaPipe</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(255,106,0,0.25), transparent 60%),
+                  radial-gradient(1000px 500px at 90% 0%, rgba(0,191,255,0.18), transparent 60%),
+                  linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 40%, #16213e 70%, #0f3460 100%);
+      min-height: 100vh; color: #fff; overflow-x: hidden;
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    header {
+      text-align: center; padding: 28px 20px;
+      background: linear-gradient(135deg, rgba(255,106,0,0.18) 0%, rgba(255,148,50,0.08) 100%);
+      border-radius: 20px; margin-bottom: 24px;
+      border: 1px solid rgba(255,106,0,0.25); backdrop-filter: blur(8px);
+    }
+    header h1 {
+      font-size: 2.2rem; font-weight: 900; letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #ff6a00, #ff9432, #ffd07a);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: 6px;
+    }
+    header .subtitle { color: rgba(255,255,255,0.72); font-size: 1rem; }
+    header .hint { margin-top: 10px; font-size: 0.82rem; color: rgba(255,255,255,0.55); }
+    header .hint code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #ffd07a; }
+    .main-content { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+    .camera-section, .side-panel {
+      background: rgba(255,255,255,0.05); border-radius: 20px; padding: 18px;
+      border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px);
+    }
+    #video-container {
+      position: relative; display: block; border-radius: 16px; overflow: hidden;
+      background: #000; box-shadow: 0 12px 40px rgba(0,0,0,0.45); aspect-ratio: 4/3;
+    }
+    #webcam { display: block; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+    .loading-overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.78);
+      display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 5;
+      transition: opacity 0.4s; backdrop-filter: blur(2px);
+    }
+    .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner { width: 56px; height: 56px; border: 5px solid rgba(255,106,0,0.2); border-top-color: #ff6a00; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 14px; font-size: 0.95rem; color: #ff8a2a; font-weight: 600; }
+    .loading-sub { margin-top: 6px; font-size: 0.78rem; color: rgba(255,255,255,0.55); max-width: 320px; text-align: center; line-height: 1.4; }
+    .status-indicator {
+      margin-top: 14px; padding: 10px 12px; background: rgba(0,0,0,0.28); border-radius: 10px;
+      display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.88rem; color: rgba(255,255,255,0.85);
+    }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 8px rgba(255,59,48,0.6); animation: pulse 1.6s infinite; flex-shrink: 0; }
+    .status-dot.active { background: #00ff88; box-shadow: 0 0 10px rgba(0,255,136,0.7); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; transform: scale(0.9); } }
+    .controls { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      flex: 1; min-width: 110px; padding: 11px 14px; border: none; border-radius: 10px;
+      font-weight: 700; cursor: pointer; transition: all 0.2s; font-size: 0.86rem;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: linear-gradient(135deg, #ff6a00, #ff9432); color: #fff; box-shadow: 0 6px 18px rgba(255,106,0,0.35); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(255,106,0,0.45); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.14); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.13); }
+    .btn-ghost { background: transparent; color: rgba(255,255,255,0.75); border: 1px dashed rgba(255,255,255,0.18); }
+    .panel-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 14px; color: #ff8a2a; display: flex; align-items: center; gap: 8px; letter-spacing: 0.3px; }
+    .panel-title small { font-weight: 600; color: rgba(255,255,255,0.45); font-size: 0.75rem; margin-left: auto; }
+
+    /* Challenge card */
+    .challenge-card {
+      background: linear-gradient(135deg, rgba(255,106,0,0.14), rgba(0,191,255,0.08));
+      border: 1px solid rgba(255,106,0,0.22); border-radius: 16px; padding: 14px; margin-bottom: 18px;
+      position: relative; overflow: hidden;
+    }
+    .challenge-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .challenge-badge { font-size: 0.7rem; font-weight: 800; letter-spacing: 1px; color: #ff9432; background: rgba(255,106,0,0.15); border: 1px solid rgba(255,106,0,0.3); padding: 4px 8px; border-radius: 50px; }
+    .challenge-score { font-size: 0.8rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+    .challenge-score b { color: #00ff88; }
+    .challenge-image-wrap {
+      background: #000; border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center; position: relative;
+    }
+    .challenge-image-wrap img {
+      width: 100%; height: 100%; object-fit: contain; background: radial-gradient(400px 300px at 30% 20%, rgba(255,255,255,0.08), transparent 60%), #0a0a12;
+      image-rendering: -webkit-optimize-contrast;
+    }
+    .challenge-label {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.72); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.12);
+      padding: 6px 12px; border-radius: 50px; font-weight: 800; font-size: 0.85rem; letter-spacing: 0.5px;
+      text-transform: uppercase; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    .challenge-label .jp { font-size: 0.68rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-left: 6px; text-transform: none; letter-spacing: 0; }
+    .challenge-status { margin-top: 10px; text-align: center; font-weight: 800; font-size: 0.9rem; min-height: 20px; }
+    .challenge-status.match { color: #00ff88; text-shadow: 0 0 10px rgba(0,255,136,0.6); animation: pop 0.4s ease; }
+    .challenge-status.waiting { color: rgba(255,255,255,0.6); font-weight: 600; font-size: 0.82rem; }
+    @keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+    .challenge-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .challenge-actions .btn { font-size: 0.8rem; padding: 9px 10px; }
+
+    /* Predictions */
+    #predictions-list { display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+    .prediction-item {
+      background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 12px;
+      display: flex; align-items: center; gap: 10px; border: 1px solid transparent;
+      transition: all 0.25s ease;
+    }
+    .prediction-item.high { background: rgba(255,106,0,0.13); border-color: rgba(255,106,0,0.35); box-shadow: 0 0 16px rgba(255,106,0,0.18); }
+    .prediction-item.is-target { background: rgba(0,255,136,0.13); border-color: rgba(0,255,136,0.45); box-shadow: 0 0 16px rgba(0,255,136,0.2); }
+    .pred-left { flex: 1; min-width: 0; }
+    .pred-name { font-weight: 700; font-size: 0.86rem; text-transform: capitalize; line-height: 1; display: flex; align-items: center; gap: 6px; }
+    .pred-jp { font-size: 0.68rem; color: rgba(255,255,255,0.45); font-weight: 500; }
+    .pred-bar { width: 88px; height: 7px; background: rgba(255,255,255,0.09); border-radius: 50px; overflow: hidden; flex-shrink: 0; }
+    .pred-fill { height: 100%; border-radius: 50px; transition: width 0.3s ease; }
+    .pred-pct { width: 44px; text-align: right; font-weight: 800; font-size: 0.82rem; flex-shrink: 0; }
+    .empty-pred { text-align: center; color: rgba(255,255,255,0.45); font-size: 0.85rem; padding: 20px 10px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; }
+
+    /* Reference grid */
+    .reference-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .ref-item {
+      position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1;
+      border: 2px solid rgba(255,255,255,0.1); transition: all 0.25s ease; cursor: pointer; background: #0a0a12;
+    }
+    .ref-item:hover { border-color: rgba(255,255,255,0.22); transform: translateY(-1px); }
+    .ref-item.active { border-color: #ff6a00; box-shadow: 0 0 16px rgba(255,106,0,0.45); transform: scale(1.04); z-index: 1; }
+    .ref-item.is-target { border-color: #00ff88; box-shadow: 0 0 16px rgba(0,255,136,0.4); }
+    .ref-item.is-target.active { border-color: #00ff88; box-shadow: 0 0 18px rgba(0,255,136,0.55), 0 0 0 1px rgba(0,255,136,0.5) inset; }
+    .ref-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ref-label {
+      position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.82));
+      padding: 14px 4px 5px; font-size: 0.62rem; font-weight: 700; text-align: center; text-transform: capitalize; letter-spacing: 0.3px;
+      line-height: 1;
+    }
+    .ref-pct {
+      position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
+      font-size: 0.6rem; font-weight: 800; padding: 2px 5px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);
+    }
+    .meta-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .meta-chip { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 5px 8px; border-radius: 50px; }
+    .voice-active { background: linear-gradient(135deg,#ff1a1a,#ff6a00) !important; color:#fff !important; animation: voicePulse 1s infinite; border-color: rgba(255,26,26,0.4) !important; }
+    @keyframes voicePulse {0%,100%{box-shadow:0 0 0 rgba(255,26,26,0)}50%{box-shadow:0 0 14px rgba(255,106,0,0.6)}}
+    #voice-status { margin-top:10px; padding:8px 10px; background:rgba(255,26,26,0.08); border:1px solid rgba(255,26,26,0.18); border-radius:8px; font-size:0.78rem; color:rgba(255,255,255,0.75); display:none; align-items:center; gap:8px; }
+    #voice-status.active { display:flex; }
+    .voice-dot { width:8px; height:8px; border-radius:50%; background:#ff1a1a; animation:pulse 1s infinite; flex-shrink:0; }
+    /* Voice Jutsu Arena — only Rasengan & Sharingan activate via voice */
+    .jutsu-arena { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+    .arena-card { position:relative; border-radius:16px; padding:18px; border:2px solid rgba(255,255,255,0.08); text-align:center; cursor:pointer; transition:all 0.3s ease; background:rgba(255,255,255,0.04); overflow:hidden; }
+    .arena-card::before { content:''; position:absolute; inset:0; opacity:0; transition:opacity 0.3s; border-radius:16px; }
+    .arena-card.rasengan { background:linear-gradient(135deg, rgba(0,191,255,0.14), rgba(0,80,180,0.08)); border-color:rgba(0,191,255,0.28); }
+    .arena-card.rasengan::before { background:radial-gradient(400px 200px at 30% 20%, rgba(0,191,255,0.22), transparent 60%); }
+    .arena-card.sharingan { background:linear-gradient(135deg, rgba(255,26,26,0.14), rgba(120,0,0,0.10)); border-color:rgba(255,26,26,0.30); }
+    .arena-card.sharingan::before { background:radial-gradient(400px 200px at 30% 20%, rgba(255,26,26,0.18), transparent 60%); }
+    .arena-card:hover { transform:translateY(-2px); }
+    .arena-card.active { transform:scale(1.03); border-color:currentColor; box-shadow:0 10px 30px rgba(0,0,0,0.35), 0 0 24px currentColor; }
+    .arena-card.active::before { opacity:1; }
+    .arena-card.rasengan.active { color:#00bfff; box-shadow:0 10px 30px rgba(0,0,0,0.35), 0 0 28px rgba(0,191,255,0.55); }
+    .arena-card.sharingan.active { color:#ff1a1a; box-shadow:0 10px 30px rgba(0,0,0,0.35), 0 0 28px rgba(255,26,26,0.55); }
+    .arena-icon { font-size:2rem; line-height:1; }
+    .arena-title { font-weight:900; font-size:1.05rem; margin-top:6px; letter-spacing:0.5px; }
+    .arena-title.rasengan { color:#00bfff; }
+    .arena-title.sharingan { color:#ff6b6b; }
+    .arena-desc { font-size:0.72rem; color:rgba(255,255,255,0.6); margin-top:4px; line-height:1.4; }
+    .arena-hint { margin-top:8px; font-size:0.68rem; font-weight:700; letter-spacing:0.5px; padding:4px 8px; border-radius:50px; display:inline-block; border:1px solid currentColor; opacity:0.8; }
+    @keyframes arenaPulse {0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1.03)}}
+    @media(max-width:720px){ .jutsu-arena{ grid-template-columns:1fr; } }
+
+    @media (max-width: 1024px) {
+      .main-content { grid-template-columns: 1fr; }
+      header h1 { font-size: 1.8rem; }
+      #video-container { aspect-ratio: 4/3; }
+    }
+    @media (max-width: 560px) {
+      .container { padding: 12px; }
+      .reference-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ðŸŒ€ Naruto Hand Sign Detector</h1>
+      <p class="subtitle">Real-time detector â€” MediaPipe Hands + VGG16 (TensorFlow.js) â€¢ 12 signs: Bird â†’ Tiger</p>
+      <p class="hint">Place hand in center | <b>Voice:</b> say "Rasengan", "Chidori", "Tiger", "Randomize" (<b>V</b> toggle) | Detector crops hand (leniency 100) + grayscales like <code>demo.py</code> | Randomize to train.</p>
+    </header>
+
+    <!-- Jutsu Arena — Click button then only jutsu activates (from website/jutsus) -->
+    <div class="jutsu-arena" id="jutsu-arena">
+      <div class="arena-card rasengan" id="arena-rasengan">
+        <div class="arena-icon">🌀</div>
+        <div class="arena-title rasengan">RASENGAN</div>
+        <div class="arena-desc">Spiralling chakra orb — <b>Click button to activate</b></div>
+        <button class="btn btn-primary" style="margin-top:10px; width:100%;" onclick="activateJutsu('rasengan')">🌀 Do Rasengan</button>
+        <div class="arena-hint">🎤 or say "Rasengan"</div>
+      </div>
+      <div class="arena-card sharingan" id="arena-sharingan">
+        <div class="arena-icon">👁️</div>
+        <div class="arena-title sharingan">SHARINGAN</div>
+        <div class="arena-desc">Awakened eye — <b>Click button to activate</b></div>
+        <button class="btn btn-primary" style="margin-top:10px; width:100%; background:linear-gradient(135deg,#ff1a1a,#990000); border:none;" onclick="activateJutsu('sharingan')">👁️ Do Sharingan</button>
+        <div class="arena-hint">🎤 or say "Sharingan" / "Sharigan"</div>
+      </div>
+    </div>
+    <!-- Jutsu Stage — loaded from website/jutsus/*.html on button click -->
+    <div id="jutsu-stage" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(5,5,15,0.92); backdrop-filter:blur(10px); flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(0,0,0,0.4);">
+        <div style="display:flex; align-items:center; gap:10px;"><span id="jutsu-stage-icon" style="font-size:1.5rem;">🌀</span><span id="jutsu-stage-title" style="font-weight:900; color:#fff;">JUTSU</span><span id="jutsu-stage-path" style="font-size:0.7rem; color:rgba(255,255,255,0.45); margin-left:8px; font-family:monospace;"></span></div>
+        <button onclick="closeJutsuStage()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:8px 14px; border-radius:50px; cursor:pointer; font-weight:700;">✕ Close</button>
+      </div>
+      <iframe id="jutsu-iframe" style="flex:1; width:100%; border:none; background:#000;" allow="microphone; camera"></iframe>
+    </div>
+
+    <div class="main-content">
+      <!-- CAMERA -->
+      <div class="camera-section">
+        <div id="video-container">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="canvas"></canvas>
+          <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loading-text">Initializing detector...</div>
+            <div class="loading-sub" id="loading-sub">Loading MediaPipe Hands. Camera will start after you click "Start Camera".</div>
+          </div>
+        </div>
+
+        <div class="status-indicator">
+          <div class="status-dot" id="status-dot"></div>
+          <span id="status-text">Idle â€” click Start Camera</span>
+          <span id="fps" style="margin-left:auto; font-size:0.75rem; color:rgba(255,255,255,0.45); font-weight:600;"></span>
+        </div>
+
+        <div class="controls">
+          <button class="btn btn-primary" id="start-btn">🎥 Start Camera</button>
+          <button class="btn btn-secondary" id="randomize-btn" title="Pick random hand sign challenge">🎲 Randomize</button>
+          <button class="btn btn-secondary" id="auto-btn" title="Auto randomize every 5s">⏱ Auto</button>
+          <button class="btn btn-ghost" id="screenshot-btn">📸 Screenshot</button>
+          <button class="btn btn-secondary" id="voice-btn" title="Voice control: say Rasengan, Chidori, Tiger etc.">🎤 Voice Off</button>
+        </div>
+        <div id="voice-status"><span class="voice-dot"></span><span id="voice-text">Voice: say "Rasengan", "Chidori", "Tiger", "Randomize"</span><span id="voice-heard" style="margin-left:auto; color:#ffd07a; font-weight:700;"></span></div>
+
+        <div class="meta-row">
+          <span class="meta-chip">ðŸ“ Crop: leniency 100 + padding 20%</span>
+          <span class="meta-chip">ðŸŽ¨ Pipeline: BGRâ†’RGBâ†’Cropâ†’Grayâ†’224Ã—224</span>
+          <span class="meta-chip" id="model-chip">ðŸ§  Model: Demo (heuristic)</span>
+        </div>
+      </div>
+
+      <!-- SIDE PANEL -->
+      <div class="side-panel">
+        <!-- CHALLENGE -->
+        <div class="challenge-card" id="challenge-card">
+          <div class="challenge-top">
+            <span class="challenge-badge">ðŸŽ¯ CHALLENGE</span>
+            <span class="challenge-score">Score: <b id="score">0</b> / <span id="attempts">0</span></span>
+          </div>
+          <div class="challenge-image-wrap" id="challenge-wrap">
+            <img id="challenge-img" src="assets/img/hand-signs/tiger.png" alt="Challenge hand sign" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+            <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; font-size:2.4rem; background:#0a0a12;" id="challenge-fallback">ðŸ¯</div>
+            <div class="challenge-label" id="challenge-label">Tiger <span class="jp">Tora</span></div>
+          </div>
+          <div class="challenge-status waiting" id="challenge-status">Click ðŸŽ² Randomize to start training</div>
+          <div class="challenge-actions">
+            <button class="btn btn-primary" id="new-challenge-btn" style="flex:1.2;">ðŸŽ² New Sign</button>
+            <button class="btn btn-secondary" id="reveal-btn" style="flex:0.8;">ðŸ‘ Reveal</button>
+          </div>
+        </div>
+
+        <div class="panel-title">ðŸŽ¯ Predictions <small id="pred-hint">Top 6</small></div>
+        <div id="predictions-list">
+          <div class="empty-pred">No hand detected â€” show your hand to the camera</div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <div class="panel-title" style="margin-bottom:8px;">ðŸ“¸ All 12 Signs â€” click to challenge <small id="shuffle-hint">shuffle</small></div>
+          <div class="reference-grid" id="reference-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <p style="text-align:center; color:rgba(255,255,255,0.35); font-size:0.72rem; margin-top:18px; line-height:1.6;">
+      Original repo: <code>yaxan/Naruto_Handsign_Classification</code> â€¢ VGG16 93.6% accuracy â€¢ Convert model via <code>tensorflowjs_converter --input_format=keras VGG_Naruto_Model2 ./tfjs_model</code> then set <code>MODEL_URL</code> in <code>app.js</code><br/>
+      Images from <code>assets/img/hand-signs/*.png</code> are used directly for randomization â€” no placeholders.
+    </p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
+

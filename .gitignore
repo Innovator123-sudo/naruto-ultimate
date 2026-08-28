@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+*.zip
+*.mp4
+*.pyc
+__pycache__/
+.env
+.env.local
+.vscode/
+.idea/

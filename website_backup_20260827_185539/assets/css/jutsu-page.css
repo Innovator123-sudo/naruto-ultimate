@@ -1,0 +1,319 @@
+/* SHARED STYLES FOR ALL JUTSU RESULT PAGES */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Lato', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+    overflow-x: hidden;
+    position: relative;
+    user-select: none;
+}
+
+.jutsu-title {
+    font-size: clamp(2.2em, 6vw, 4.5em);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-shadow: 0 0 25px currentColor;
+    animation: title-in 1s ease-out;
+    margin-bottom: 0.3em;
+}
+
+.jutsu-subtitle {
+    font-size: clamp(1em, 2.5vw, 1.4em);
+    opacity: 0.85;
+    max-width: 700px;
+    line-height: 1.6;
+    animation: fade-in 1.4s ease-out;
+    margin-bottom: 1.5em;
+}
+
+.back-button {
+    display: inline-block;
+    margin-top: 2.5em;
+    padding: 0.9em 2.2em;
+    font-family: 'Lato', sans-serif;
+    font-size: 1.05em;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #fff;
+    text-decoration: none;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 40px;
+    background: rgba(0, 0, 0, 0.35);
+    transition: all 0.25s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.92);
+    color: #111;
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+}
+
+@keyframes title-in {
+    from {
+        transform: scale(0.3);
+        opacity: 0;
+        filter: blur(12px);
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 0.85;
+    }
+}
+
+/* ============================================ */
+/* THEMES */
+/* ============================================ */
+
+.theme-shadow {
+    background: radial-gradient(ellipse at center, #2b1b3d 0%, #120a1d 55%, #050308 100%);
+    color: #c9a7ff;
+}
+
+.theme-wind {
+    background: radial-gradient(ellipse at center, #0e3a52 0%, #06202f 55%, #010a12 100%);
+    color: #7fdcff;
+}
+
+.theme-lightning {
+    background: radial-gradient(ellipse at center, #26203f 0%, #14101f 55%, #050308 100%);
+    color: #bde8ff;
+}
+
+.theme-fire {
+    background: radial-gradient(ellipse at center, #57200a 0%, #2e0f04 55%, #120501 100%);
+    color: #ffb35c;
+}
+
+.theme-water {
+    background: radial-gradient(ellipse at center, #0b3d63 0%, #052238 55%, #010c16 100%);
+    color: #8fd3ff;
+}
+
+.theme-earth {
+    background: radial-gradient(ellipse at center, #4a3620 0%, #241708 55%, #0e0803 100%);
+    color: #e0b97a;
+}
+
+.theme-summon {
+    background: radial-gradient(ellipse at center, #4d1010 0%, #280707 55%, #100202 100%);
+    color: #ff9a9a;
+}
+
+/* ============================================ */
+/* EMBLEM: SHADOW CLONE */
+/* ============================================ */
+
+.emblem {
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2em;
+    margin-bottom: 1em;
+}
+
+.clone-silhouette {
+    width: 90px;
+    height: 180px;
+    border-radius: 45px 45px 18px 18px;
+    background: linear-gradient(180deg, rgba(201, 167, 255, 0.55), rgba(201, 167, 255, 0.08));
+    box-shadow: 0 0 35px rgba(160, 100, 255, 0.5);
+    animation: clone-rise 1s ease-out both;
+}
+
+.clone-silhouette:nth-child(1) {
+    animation-delay: 0.15s;
+    transform: rotate(-8deg);
+}
+
+.clone-silhouette:nth-child(2) {
+    animation-delay: 0.4s;
+    transform: translateY(-14px) scale(1.12);
+}
+
+.clone-silhouette:nth-child(3) {
+    animation-delay: 0.65s;
+    transform: rotate(8deg);
+}
+
+@keyframes clone-rise {
+    from {
+        opacity: 0;
+        transform: translateY(60px);
+        filter: blur(10px);
+    }
+
+    to {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+/* ============================================ */
+/* EMBLEM: RASENGAN */
+/* ============================================ */
+
+.rasengan-orb {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 38% 34%, rgba(255, 255, 255, 0.98) 0%, rgba(190, 240, 255, 0.95) 16%, rgba(60, 190, 255, 0.85) 42%, rgba(20, 110, 210, 0.75) 68%, rgba(8, 60, 130, 0.65) 100%);
+    box-shadow: 0 0 60px 22px rgba(60, 170, 255, 0.55), inset 0 0 45px rgba(255, 255, 255, 0.65);
+    animation: rasengan-spin 2.2s linear infinite, rasengan-pulse 1.6s ease-in-out infinite;
+}
+
+.rasengan-orb::after {
+    content: '';
+    position: absolute;
+    inset: 14%;
+    border-radius: 50%;
+    background: repeating-conic-gradient(rgba(255, 255, 255, 0.5) 0deg 12deg, transparent 12deg 34deg);
+    filter: blur(3px);
+}
+
+@keyframes rasengan-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes rasengan-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 55px 18px rgba(60, 170, 255, 0.5), inset 0 0 45px rgba(255, 255, 255, 0.65);
+    }
+
+    50% {
+        box-shadow: 0 0 90px 38px rgba(60, 170, 255, 0.75), inset 0 0 55px rgba(255, 255, 255, 0.85);
+    }
+}
+
+/* ============================================ */
+/* EMBLEM: CHIDORI */
+/* ============================================ */
+
+.chidori-bolt {
+    width: 150px;
+    height: 260px;
+    filter: drop-shadow(0 0 22px rgba(140, 220, 255, 0.95));
+    animation: chidori-flicker 0.28s steps(2, jump-none) infinite;
+}
+
+.chidori-bolt path {
+    stroke: #cfeeff;
+    fill: none;
+    stroke-width: 7;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.chidori-bolt .bolt-core {
+    stroke-width: 3;
+    stroke: #ffffff;
+}
+
+@keyframes chidori-flicker {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(1.07) skewX(2deg);
+    }
+}
+
+/* ============================================ */
+/* EMBLEM: GENERIC ORB (FIRE / WATER / EARTH / SUMMON / SHARINGAN FALLBACK) */
+/* ============================================ */
+
+.element-orb {
+    position: relative;
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    animation: orb-pulse 1.8s ease-in-out infinite;
+}
+
+.theme-fire .element-orb {
+    background: radial-gradient(circle at 40% 32%, #fff3c0 0%, #ffc44d 22%, #ff7a1a 48%, #d43b04 72%, #6e1600 100%);
+    box-shadow: 0 0 70px 25px rgba(255, 120, 20, 0.55);
+}
+
+.theme-water .element-orb {
+    background: radial-gradient(circle at 40% 32%, #dff6ff 0%, #7cd0ff 25%, #2196e0 55%, #0b4f8a 80%, #04263f 100%);
+    box-shadow: 0 0 70px 25px rgba(60, 170, 255, 0.5);
+    animation: orb-pulse 1.8s ease-in-out infinite, orb-wave 3.2s ease-in-out infinite;
+}
+
+.theme-earth .element-orb {
+    background:
+        radial-gradient(circle at 40% 32%, #e8cf9e 0%, #c89b56 25%, #8a5f27 55%, #4e330f 82%);
+    box-shadow: 0 0 60px 20px rgba(200, 155, 86, 0.4);
+    border: 6px solid #33220c;
+}
+
+.theme-summon .element-orb {
+    background: radial-gradient(circle at 42% 34%, #ffe1e1 0%, #ff8585 25%, #e02020 55%, #7c0a0a 85%);
+    box-shadow: 0 0 70px 25px rgba(255, 60, 60, 0.55);
+}
+
+.theme-eye .element-orb {
+    background: radial-gradient(circle at 42% 34%, #ffdddd 0%, #ff5c5c 25%, #d40d0d 55%, #5c0000 90%);
+    box-shadow: 0 0 80px 30px rgba(255, 30, 30, 0.6);
+}
+
+@keyframes orb-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.09);
+    }
+}
+
+@keyframes orb-wave {
+
+    0%,
+    100% {
+        border-radius: 50% 50% 46% 54% / 52% 48% 52% 48%;
+    }
+
+    50% {
+        border-radius: 47% 53% 55% 45% / 45% 55% 45% 55%;
+    }
+}

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Shadow Clone Jutsu — Create shadow clones of yourself using selfie segmentation and real-time body tracking.">
+  <title>👥 Shadow Clone Jutsu — Multi Body Duplication</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    .clone-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-xl);
+      gap: var(--space-xl);
+    }
+
+    .clone-video-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      background: #000;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 8px 40px rgba(0, 229, 255, 0.08);
+    }
+
+    #clone-video {
+      display: none;
+    }
+
+    #clone-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .clone-hud {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 10;
+      background: rgba(5, 0, 15, 0.7);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-left: 4px solid var(--shadow-cyan);
+      padding: 10px 16px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      backdrop-filter: blur(8px);
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .hud-title {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .hud-status {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--shadow-cyan);
+      text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    }
+
+    .hud-confidence {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .clone-controls {
+      display: flex;
+      gap: var(--space-md);
+      align-items: center;
+    }
+
+    .overlay-btn-container {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+    }
+
+    .overlay-btn-container img {
+      width: 90px;
+      height: auto;
+      transform: scaleX(-1);
+      transition: transform 0.5s ease;
+    }
+
+    .overlay-btn-container.pop img {
+      transform: scaleX(-1) scale(1.3);
+    }
+
+    .clone-info {
+      text-align: center;
+      max-width: 600px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .clone-info strong {
+      color: var(--shadow-cyan);
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ff6666;
+      padding: var(--space-md);
+      border-radius: var(--radius-sm);
+      display: none;
+      font-size: 0.9rem;
+      max-width: 600px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <!-- Header -->
+    <header class="page-header">
+      <a href="index.html" class="back-btn" id="backBtn">
+        ← Back to Jutsu Hub
+      </a>
+      <h1 class="page-title">👥 Shadow Clone Jutsu</h1>
+      <div></div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="clone-main">
+
+      <div id="errorMsg" class="error-msg"></div>
+
+      <div class="clone-video-container">
+        <video id="clone-video" autoplay playsinline></video>
+        <canvas id="clone-canvas"></canvas>
+
+        <div class="clone-hud">
+          <div class="hud-title">Clone System</div>
+          <div class="hud-status" id="hudStatus">WAITING FOR CAMERA...</div>
+          <div class="hud-confidence">Confidence: <span id="confidenceVal">0%</span></div>
+        </div>
+
+        <div class="overlay-btn-container" id="overlayBtnWrap">
+          <img id="overlayImg" src="naruto-shadow-clone-jutsu-main/naruto-shadow-clone-jutsu-main/assets/state-1.png" data-state="1" alt="hand state">
+        </div>
+      </div>
+
+      <div class="clone-controls">
+        <button class="clone-activate-btn" id="activateCloneBtn" onclick="manualTriggerClones()">
+          🤞 Activate Shadow Clones
+        </button>
+        <button class="clone-activate-btn" id="resetCloneBtn" onclick="resetClones()" style="background: linear-gradient(135deg, #ff4444, #cc0000); color: white;">
+          🔄 Reset
+        </button>
+      </div>
+
+      <p class="clone-info">
+        Form the <strong>cross hand sign</strong> (✌️+✌️) in front of your camera to trigger clones automatically,
+        or press the button above. Clones will appear with smoke effects around you!
+      </p>
+
+    </main>
+
+    <footer class="site-footer">
+      <p>Shadow Clone Jutsu — Kage Bunshin no Jutsu 🌀</p>
+    </footer>
+
+  </div>
+
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+  <!-- MediaPipe Core -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+  <!-- MediaPipe Models -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+  <script src="shadow-clone.js"></script>
+
+</body>
+</html>

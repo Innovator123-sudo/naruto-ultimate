@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Naruto Ultimate Jutsu Hub — Every jutsu has a CUSTOM handsign! Perform Rasengan (Ushi→Tora→U→Inu→I) vs Chidori (Tori→U→Tatsu→Inu→Tora), Shadow Clone auto-redirect, Sharingan voice eye summon.">
+  <title>🌀 Naruto Ultimate Jutsu Hub — CUSTOM Handsigns</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" href="naruto-handsign-recognition-main/naruto-handsign-recognition-main/assets/img/konoha.png">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <!-- cv2 (OpenCV.js) for Sharingan is LAZY-LOADED only when Sharingan is triggered (see hubSharinganVoiceEffect) to keep hub responsive. No head load. -->
+  <style>
+    /* HANDSIGN CAMERA WIDGET */
+    #handsign-widget {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      width: 340px;
+      background: rgba(10,10,22,0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06) inset;
+      transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    #handsign-widget.minimized {
+      width: 180px;
+      height: 54px;
+    }
+    #handsign-widget.minimized #widget-body { display:none; }
+    #widget-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px;
+      background: linear-gradient(135deg, rgba(255,148,50,0.15), rgba(0,191,255,0.08));
+      border-bottom:1px solid rgba(255,255,255,0.08);
+      cursor:pointer;
+    }
+    #widget-header h3 { font-size:0.85rem; font-weight:800; letter-spacing:1px; display:flex; align-items:center; gap:8px; margin:0; }
+    #widget-header h3 .dot2 { width:8px; height:8px; border-radius:50%; background:#00ff88; animation: pulseDot 1.5s ease infinite; display:inline-block; }
+    #widget-toggle { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; width:28px; height:28px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.9rem; }
+    #widget-body { padding:14px; }
+    #widget-video-wrap {
+      position:relative; width:100%; aspect-ratio:1; border-radius:14px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,0.1);
+    }
+    #widget-video-wrap #webcam-container { position:absolute; inset:0; display:flex; border-radius:0; overflow:hidden; opacity:0; transition:opacity 0.8s; }
+    #widget-video-wrap canvas#image-canvas { position:absolute; inset:0; width:100%; height:100%; }
+    #widget-video-wrap #loading-circle { position:absolute; inset:-4px; border-radius:50%; pointer-events:none; border:2px solid transparent; }
+    #widget-labels { margin-top:10px; text-align:center; }
+    #label-container { position:static; transform:none; font-size:1.1rem; font-weight:800; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:6px 12px; border-radius:50px; min-height:32px; display:flex; align-items:center; justify-content:center; letter-spacing:1px; text-transform:uppercase; }
+    #past-labels { position:static; transform:none; display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:8px; min-height:24px; }
+    #past-labels div { background:rgba(0,191,255,0.15); border:1px solid rgba(0,191,255,0.25); color:#88ddff; padding:4px 10px; border-radius:50px; font-size:0.7rem; font-weight:700; animation: pastPop 0.3s both; }
+    #finished-jutsu-container { position:static; transform:none; font-size:1.2rem; font-weight:900; text-align:center; margin-top:8px; min-height:20px; }
+    #widget-hint { font-size:0.7rem; color:rgba(255,255,255,0.5); text-align:center; margin-top:8px; line-height:1.4; }
+    #widget-controls { display:flex; gap:8px; margin-top:10px; }
+    #widget-controls button { flex:1; padding:8px; border-radius:50px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:#fff; font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.2s; }
+    #widget-controls button:hover { background:rgba(255,255,255,0.12); }
+    @keyframes pulseDot{0%,100%{opacity:1}50%{opacity:0.5;transform:scale(0.8)}}
+    @keyframes pastPop{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}
+    /* CARD GLOW WHEN JUTSU MATCHED */
+    .jutsu-card.jutsu-active { transform:translateY(-8px) scale(1.02); }
+    .jutsu-card.jutsu-active.rasengan { border-color:rgba(0,191,255,0.7)!important; box-shadow:0 0 40px rgba(0,191,255,0.4), 0 20px 60px rgba(0,0,0,0.4)!important; }
+    .jutsu-card.jutsu-active.shadow-clone { border-color:rgba(0,229,255,0.7)!important; box-shadow:0 0 40px rgba(0,229,255,0.4)!important; }
+    .jutsu-card.jutsu-active.sharingan { border-color:rgba(255,26,26,0.7)!important; box-shadow:0 0 40px rgba(255,26,26,0.4)!important; }
+    /* SEQUENCE BADGE ON CARDS */
+    .card-sequence { font-size:0.72rem; color:rgba(255,255,255,0.55); margin-top:6px; font-family:monospace; letter-spacing:0.5px; }
+    .card-sequence strong { color:rgba(255,255,255,0.9); }
+    /* RESPONSIVE widget */
+    @media(max-width:768px){ #handsign-widget{ width:94vw; right:3vw; left:3vw; bottom:10px; } #handsign-widget.minimized{ width:160px; left:auto; } }
+  </style>
+</head>
+<body>
+
+  <!-- Particle Background -->
+  <canvas id="particles-canvas"></canvas>
+
+  <!-- Flash Transition Overlay -->
+  <div class="flash-overlay" id="flashOverlay"></div>
+
+  <div class="page-wrapper">
+
+    <!-- Navigation -->
+    <nav class="nav-bar" id="mainNav">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">🌀</span>
+        <span class="brand-text">ULTIMATE JUTSU HUB</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#jutsu-section">Jutsus</a></li>
+        <li><a href="naruto-handsign-recognition-main/naruto-handsign-recognition-main/index.html" style="color:#ff9432;">🎯 Live Dojo</a></li>
+        <li><a href="overview.md" target="_blank">Overview</a></li>
+      </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        14 CUSTOM SEQUENCES • EVERY JUTSU UNIQUE
+      </div>
+      <h1>
+        Perform Your<br>
+        <span class="gradient-text">CUSTOM Jutsu</span>
+      </h1>
+      <p>Every single jutsu has a <strong style="color:#ff9432;">CUSTOM handsign</strong> — <span style="color:#00bfff;">Rasengan</span> & <span style="color:#b824ff;">Chidori</span> are completely distinct. Do Shadow Clone to be <em>redirected into the clone dimension</em>. Do Sharingan, then <em>say the number of eyes</em> and they appear!</p>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:16px;">
+        <span style="background:rgba(0,191,255,0.12); border:1px solid rgba(0,191,255,0.3); color:#00bfff; padding:8px 14px; border-radius:50px; font-size:0.8rem; font-weight:700;">🌀 Rasengan: Ushi → Tora → U → Inu → I</span>
+        <span style="background:rgba(184,36,255,0.12); border:1px solid rgba(184,36,255,0.3); color:#b824ff; padding:8px 14px; border-radius:50px; font-size:0.8rem; font-weight:700;">⚡ Chidori: Tori → U → Tatsu → Inu → Tora</span>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:center;">
+        <span style="background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); color:#00e5ff; padding:6px 12px; border-radius:50px; font-size:0.78rem;">👥 Clone: Tora→Saru→Uma→I→Release → <b>REDIRECT</b></span>
+        <span style="background:rgba(255,26,26,0.12); border:1px solid rgba(255,26,26,0.3); color:#ff6b6b; padding:6px 12px; border-radius:50px; font-size:0.78rem;">👁️ Sharingan: Mi→Tori→Ushi→Uma→I → <b>🎤 SAY NUMBER</b></span>
+      </div>
+    </section>
+
+    <!-- Jutsu Cards -->
+    <section id="jutsu-section" class="jutsu-grid">
+
+      <!-- Rasengan Card (distinct from Chidori) -->
+      <div class="jutsu-card rasengan" id="cardRasengan" onclick="activateJutsu('rasengan-chidori.html', 'blue')" data-jutsu="Rasengan">
+        <div class="card-image">
+          <img src="assets/rasengan_orb.jpg" alt="Rasengan energy sphere">
+        </div>
+        <span class="card-tag">Ninjutsu • CUSTOM</span>
+        <h2 class="card-title">🌀 Rasengan</h2>
+        <p class="card-desc">Blue spiraling chakra sphere. Right palm open, orb hovers & spins. <strong>Distinct handsign</strong> — not the same as Chidori.</p>
+        <div class="card-sequence">Sequence: <strong>Ushi → Tora → U → Inu → I</strong></div>
+        <span class="card-action">Activate Rasengan <span class="arrow">→</span></span>
+      </div>
+
+      <!-- Chidori Card (distinct) -->
+      <div class="jutsu-card" id="cardChidori" onclick="activateJutsu('rasengan-chidori.html?jutsu=chidori', 'purple')" style="border-top:3px solid #b824ff;" data-jutsu="Chidori">
+        <div class="card-image">
+          <img src="assets/rasengan_orb.jpg" alt="Chidori lightning" style="filter:hue-rotate(270deg) brightness(1.1) saturate(1.4);">
+        </div>
+        <span class="card-tag" style="background:rgba(184,36,255,0.12); color:#b824ff;">Ninjutsu • CUSTOM • LIGHTNING</span>
+        <h2 class="card-title">⚡ Chidori</h2>
+        <p class="card-desc">Purple lightning blade with 1000 birds chirping. Crackling arcs & screen shake — <strong>completely different VFX from Rasengan</strong>.</p>
+        <div class="card-sequence">Sequence: <strong>Tori → U → Tatsu → Inu → Tora</strong></div>
+        <span class="card-action" style="color:#b824ff;">Activate Chidori <span class="arrow">→</span></span>
+      </div>
+
+      <!-- Shadow Clone Card -->
+      <div class="jutsu-card shadow-clone" id="cardShadowClone" onclick="activateJutsu('kage-bunshin-clone-me-main/index.html', 'cyan')" data-jutsu="Shadow Clone Jutsu">
+        <div class="card-image">
+          <img src="assets/shadow_clone_sign.jpg" alt="Shadow Clone hand sign">
+        </div>
+        <span class="card-tag">Kinjutsu • REDIRECT</span>
+        <h2 class="card-title">👥 Shadow Clone Jutsu</h2>
+        <p class="card-desc">Perform the sequence → white smoke + 3 clones spawn around you, then you are <strong>redirected into the clone dimension</strong> automatically.</p>
+        <div class="card-sequence">Sequence: <strong>Tora → Saru → Uma → I → Release</strong></div>
+        <span class="card-action">Activate clones <span class="arrow">→</span></span>
+      </div>
+
+      <!-- Sharingan Card -->
+      <div class="jutsu-card sharingan" id="cardSharingan" onclick="activateJutsu('sharingan.html', 'red')" data-jutsu="Sharingan Jutsu">
+        <div class="card-image">
+          <img src="assets/sharingan_eye.jpg" alt="Sharingan eye with tomoe">
+        </div>
+        <span class="card-tag">Dōjutsu • VOICE</span>
+        <h2 class="card-title">👁️ Sharingan Jutsu</h2>
+        <p class="card-desc">Red flash → voice prompt appears. <strong>Say “two” / “five” / “seven”</strong> and that many spinning Sharingan eyes manifest with sound.</p>
+        <div class="card-sequence">Sequence: <strong>Mi → Tori → Ushi → Uma → I</strong></div>
+        <span class="card-action">Awaken Sharingan <span class="arrow">→</span></span>
+      </div>
+
+    </section>
+
+    <!-- All 14 Jutsus Quick List -->
+    <section style="max-width:1100px; margin:0 auto; padding:0 24px 40px; width:100%;">
+      <h3 style="text-align:center; color:rgba(255,255,255,0.6); font-size:0.9rem; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;">— All 14 Custom Jutsu Sequences —</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:10px; font-size:0.82rem;">
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Thunderstorm</strong>: Uma → Tora → Mi</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Tidal Wave</strong>: Uma → Mi → Inu → Tatsu → Release</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Magma Eruption</strong>: Tora → Tatsu → Ne → Tora</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Sandstorm</strong>: Uma → U → Inu → Saru → Tori</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Ice Shard</strong>: Tori → Saru → Mi → Tori → Release</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Tornado</strong>: Ushi → U → Inu → Tatsu → Tori</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Earth Wall</strong>: Saru → Ne → Tatsu → Ushi → Tora</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Fog Concealment</strong>: Tori → Tatsu → Mi → Ne → Uma</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Water Strike</strong>: Tora → U → Ne → Tori → Saru</div>
+        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px;"><strong>Fire Ball</strong>: Ne → Tora → Tatsu → Mi → Tori → Tora</div>
+        <div style="background:rgba(0,191,255,0.08); border:1px solid rgba(0,191,255,0.25); padding:10px 14px; border-radius:10px; color:#00bfff;"><strong>🌀 Rasengan</strong>: Ushi → Tora → U → Inu → I <span style="background:#00bfff; color:#fff; padding:1px 5px; border-radius:6px; font-size:0.65rem; margin-left:4px;">CUSTOM BLUE</span></div>
+        <div style="background:rgba(184,36,255,0.08); border:1px solid rgba(184,36,255,0.25); padding:10px 14px; border-radius:10px; color:#c77dff;"><strong>⚡ Chidori</strong>: Tori → U → Tatsu → Inu → Tora <span style="background:#b824ff; color:#fff; padding:1px 5px; border-radius:6px; font-size:0.65rem; margin-left:4px;">CUSTOM PURPLE</span></div>
+        <div style="background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); padding:10px 14px; border-radius:10px; color:#00e5ff;"><strong>👥 Shadow Clone</strong>: Tora→Saru→Uma→I→Release <span style="background:#00e5ff; color:#001; padding:1px 5px; border-radius:6px; font-size:0.65rem; margin-left:4px;">REDIRECT</span></div>
+        <div style="background:rgba(255,26,26,0.08); border:1px solid rgba(255,26,26,0.25); padding:10px 14px; border-radius:10px; color:#ff6b6b;"><strong>👁️ Sharingan</strong>: Mi→Tori→Ushi→Uma→I <span style="background:#ff1a1a; color:#fff; padding:1px 5px; border-radius:6px; font-size:0.65rem; margin-left:4px;">VOICE EYES</span></div>
+      </div>
+      <p style="text-align:center; color:rgba(255,255,255,0.35); font-size:0.75rem; margin-top:14px;">Tip: Open the <a href="naruto-handsign-recognition-main/naruto-handsign-recognition-main/index.html" style="color:#ff9432;">Live Dojo (full-screen camera jutsu mode)</a> for the ultimate hand-sign experience with per-jutsu VFX!</p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <p>Built with chakra 🌀 — Ultimate Jutsu Hub • Every jutsu CUSTOM • Rasengan ≠ Chidori &copy; 2026</p>
+    </footer>
+
+  </div>
+
+  <!-- HANDSIGN CAMERA WIDGET (floating, hand-controlled) -->
+  <div id="handsign-widget">
+    <div id="widget-header" onclick="toggleWidget()">
+      <h3><span class="dot2"></span> JUTSU CAM • HANDSIGNS</h3>
+      <button id="widget-toggle">−</button>
+    </div>
+    <div id="widget-body">
+      <div id="widget-video-wrap">
+        <div id="webcam-container"></div>
+        <canvas id="image-canvas"></canvas>
+        <div id="loading-circle"></div>
+      </div>
+      <canvas id="processed-canvas" hidden></canvas>
+      <div id="widget-labels">
+        <div id="label-container" style="font-size:0.95rem;"></div>
+        <div id="past-labels"></div>
+        <div id="finished-jutsu-container" style="font-size:1rem;"></div>
+      </div>
+      <div id="widget-hint">Position hands → sequence builds below • Remove hands to reset • <em>Try Shadow Clone → auto-redirect!</em></div>
+      <div id="widget-controls">
+        <button onclick="window.location.href='naruto-handsign-recognition-main/naruto-handsign-recognition-main/index.html'">🎯 Full Dojo</button>
+        <button onclick="toggleWidget()">− Minimize</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleWidget(){
+      const w=document.getElementById('handsign-widget');
+      const btn=document.getElementById('widget-toggle');
+      w.classList.toggle('minimized');
+      btn.textContent=w.classList.contains('minimized')? '+':'−';
+    }
+  </script>
+
+  <!-- PARTICLE BG - mobile lite -->
+  <script>
+    const canvas = document.getElementById('particles-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    const isMobileHub = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const PARTICLE_COUNT = isMobileHub ? 28 : 80;
+    const PARTICLE_LINKS = !isMobileHub; // disable lines on mobile for 3x FPS
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas); resizeCanvas();
+    class Particle {
+      constructor(){ this.reset(); }
+      reset(){ this.x=Math.random()*canvas.width; this.y=Math.random()*canvas.height; this.vx=(Math.random()-0.5)*(isMobileHub?0.18:0.3); this.vy=(Math.random()-0.5)*0.3-0.15; this.radius=Math.random()*(isMobileHub?1.4:2)+0.5; this.alpha=Math.random()*0.4+0.1; this.color=['rgba(0,191,255,','rgba(184,36,255,','rgba(255,136,0,'][Math.floor(Math.random()*3)]; this.pulse=Math.random()*Math.PI*2; this.pulseSpeed=Math.random()*0.02+0.01; }
+      update(){ this.x+=this.vx; this.y+=this.vy; this.pulse+=this.pulseSpeed; if(this.x<0||this.x>canvas.width||this.y<0||this.y>canvas.height){ this.reset(); this.y=canvas.height+10; } }
+      draw(){ const a=this.alpha*(0.6+0.4*Math.sin(this.pulse)); ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fillStyle=this.color+a+')'; ctx.fill(); if(!isMobileHub){ ctx.beginPath(); ctx.arc(this.x,this.y,this.radius*3,0,Math.PI*2); ctx.fillStyle=this.color+(a*0.15)+')'; ctx.fill(); } }
+    }
+    for(let i=0;i<PARTICLE_COUNT;i++) particles.push(new Particle());
+    let lastParticleFrame=0;
+    function animateParticles(ts){
+      // throttle to 30fps on mobile
+      if(isMobileHub && ts - lastParticleFrame < 33){ requestAnimationFrame(animateParticles); return; }
+      lastParticleFrame = ts;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      particles.forEach(p=>{p.update();p.draw();});
+      if(PARTICLE_LINKS){
+        for(let i=0;i<particles.length;i++) for(let j=i+1;j<particles.length;j++){ const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<120){ const a=(1-dist/120)*0.08; ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y); ctx.strokeStyle=`rgba(100,160,255,${a})`; ctx.lineWidth=0.5; ctx.stroke(); }}
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    requestAnimationFrame(animateParticles);
+    function activateJutsu(url, color){
+      const flash=document.getElementById('flashOverlay');
+      flash.className='flash-overlay '+color+' active';
+      try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(),g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.setValueAtTime(800,ac.currentTime); o.frequency.exponentialRampToValueAtTime(200,ac.currentTime+0.3); g.gain.setValueAtTime(0.15,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.3); o.start(); o.stop(ac.currentTime+0.3);}catch(e){}
+      setTimeout(()=>{ window.location.href=url; },600);
+    }
+    window.activateJutsu = activateJutsu;
+  </script>
+
+  <!-- HANDSIGN AUTO-TRIGGER ENGINE (same pipeline as Dojo, but dispatches to Hub cards) -->
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm';
+
+    // ── CONFIG ──
+    const TEACHABLE_MACHINE_URL = './assets/models/teachable-machine/';
+    const MEDIAPIPE_MODEL = './assets/models/mediapipe/hand_landmarker.task';
+    const JUTSUS_JSON = './assets/jutsus.json';
+    const CAM_W=340, CAM_H=340;
+    const DRAW_BOX=false;
+
+    let handLandmarker, tmModel, jutsus;
+    let webcam;
+    let predictions=[], predictionCounter=0, previousPrediction, threshold=22;
+    let totalClasses=0;
+
+    const boxCanvas=document.getElementById('image-canvas');
+    const boxCtx=boxCanvas.getContext('2d');
+    const procCanvas=document.getElementById('processed-canvas');
+    const procCtx=procCanvas.getContext('2d', {willReadFrequently:true});
+    const labelContainer=document.getElementById('label-container');
+    const loadingCircle=document.getElementById('loading-circle');
+    const pastLabels=document.getElementById('past-labels');
+    const finishedContainer=document.getElementById('finished-jutsu-container');
+    const webcamContainer=document.getElementById('webcam-container');
+
+    // particle temp canvas
+    const tempCanvas=new OffscreenCanvas(224,224);
+    const tempCtx=tempCanvas.getContext('2d');
+
+    // fetch jutsus
+    async function loadJutsus(){
+      const r=await fetch(JUTSUS_JSON); const d=await r.json(); jutsus=d;
+      // store globally for effects mapping display
+      window._jutsusMap=jutsus;
+      return d;
+    }
+
+    async function createHandLandmarker(){
+      const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm');
+      handLandmarker=await HandLandmarker.createFromOptions(vision,{
+        baseOptions:{modelAssetPath:MEDIAPIPE_MODEL},
+        runningMode:'VIDEO', numHands:2,
+        minHandDetectionConfidence:0.5, minHandPresenceConfidence:0.5, minTrackingConfidence:0.5
+      });
+    }
+    async function loadTM(){
+      const mURL=TEACHABLE_MACHINE_URL+'model.json', metaURL=TEACHABLE_MACHINE_URL+'metadata.json';
+      tmModel=await tmImage.load(mURL, metaURL);
+      totalClasses=tmModel.getTotalClasses();
+    }
+    function calculateHandBoundingBox(landmarks, results){
+      let [{x:minX,y:minY}]=landmarks; let maxX=minX, maxY=minY;
+      for(const {x,y} of landmarks){ minX=Math.min(minX,x); maxX=Math.max(maxX,x); minY=Math.min(minY,y); maxY=Math.max(maxY,y); }
+      const padding= results.landmarks.length===1 ? 0.025*2 : 0.025;
+      return [minX-padding, maxX+padding, minY-padding, maxY+padding];
+    }
+    function doRectanglesOverlap(r1,r2){ return r1.minX<r2.maxX && r1.maxX>r2.minX && r1.minY<r2.maxY && r1.maxY> r2.minY; }
+    function processCanvas(rect,CAM_H,CAM_W,croppedCanvas,croppedCanvasCtx,webcam,landmarks){
+      croppedCanvas.width=(rect.maxX-rect.minX)*CAM_W; croppedCanvas.height=(rect.maxY-rect.minY)*CAM_H;
+      croppedCanvasCtx.drawImage(webcam.canvas, rect.minX*CAM_W, rect.minY*CAM_H, (rect.maxX-rect.minX)*CAM_W,(rect.maxY-rect.minY)*CAM_H, 0,0,croppedCanvas.width,croppedCanvas.height);
+      // grayscale
+      const id=croppedCanvasCtx.getImageData(0,0,croppedCanvas.width,croppedCanvas.height); const d=id.data; for(let i=0;i<d.length;i+=4){ const a=(d[i]+d[i+1]+d[i+2])/3; d[i]=d[i+1]=d[i+2]=a; } croppedCanvasCtx.putImageData(id,0,0);
+      // resize 224
+      tempCanvas.width=224; tempCanvas.height=224; tempCtx.drawImage(croppedCanvas,0,0,224,224); croppedCanvas.width=224; croppedCanvas.height=224; croppedCanvasCtx.drawImage(tempCanvas,0,0);
+      // draw landmarks red
+      for(let lm of landmarks){ drawHandLandmarks(croppedCanvasCtx, lm, croppedCanvas.width, croppedCanvas.height, rect); }
+    }
+    function drawHandLandmarks(croppedCanvas, landmarks, canvasWidth, canvasHeight, rectangle, pointSize=2.5, lineWidth=1, fillColor="red", strokeColor="red"){
+      const conn=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17],[17,0]];
+      for(let i=0;i<landmarks.length;i++){ let x=(landmarks[i].x-rectangle.minX)/(rectangle.maxX-rectangle.minX)*canvasWidth; let y=(landmarks[i].y-rectangle.minY)/(rectangle.maxY-rectangle.minY)*canvasHeight; croppedCanvas.beginPath(); croppedCanvas.arc(x,y,pointSize,0,2*Math.PI); croppedCanvas.fillStyle=fillColor; croppedCanvas.fill(); croppedCanvas.closePath(); }
+      croppedCanvas.beginPath(); croppedCanvas.strokeStyle=strokeColor; croppedCanvas.lineWidth=lineWidth;
+      for(let [a,b] of conn){ let s=landmarks[a], e=landmarks[b]; let sx=(s.x-rectangle.minX)/(rectangle.maxX-rectangle.minX)*canvasWidth, sy=(s.y-rectangle.minY)/(rectangle.maxY-rectangle.minY)*canvasHeight, ex=(e.x-rectangle.minX)/(rectangle.maxX-rectangle.minX)*canvasWidth, ey=(e.y-rectangle.minY)/(rectangle.maxY-rectangle.minY)*canvasHeight; croppedCanvas.moveTo(sx,sy); croppedCanvas.lineTo(ex,ey); }
+      croppedCanvas.stroke(); croppedCanvas.closePath();
+    }
+    function detectHandsForVideo(canvas,t){ return handLandmarker.detectForVideo(canvas,t); }
+    async function predictTM(croppedCanvas){
+      const preds=await tmModel.predict(croppedCanvas);
+      return preds.reduce((m,c)=> c.probability>m.probability?c:m).className;
+    }
+
+    // UI helpers
+    function resetPredictions(){
+      predictions=[]; predictionCounter=0; previousPrediction=undefined;
+      labelContainer.innerHTML=''; loadingCircle.style.backgroundImage='none'; pastLabels.innerHTML='';
+    }
+    function updateLoading(){ const prog=(predictionCounter/threshold)*360; const empty='#fffdf1'; loadingCircle.style.backgroundImage=`conic-gradient(${empty} ${prog}deg, transparent ${prog}deg)`; const sz=document.getElementById('widget-video-wrap').offsetHeight; loadingCircle.style.width=sz+'px'; loadingCircle.style.height=sz+'px'; }
+    function updatePastLabels(){
+      pastLabels.innerHTML='';
+      predictions.forEach(p=>{
+        if(p!=='Nothing'){
+          const d=document.createElement('div'); d.textContent=p; pastLabels.appendChild(d);
+        }
+      });
+    }
+    function setCardActive(jutsu){
+      document.querySelectorAll('.jutsu-card').forEach(c=> c.classList.remove('jutsu-active'));
+      const map={
+        'Rasengan':'cardRasengan',
+        'Chidori':'cardChidori',
+        'Shadow Clone Jutsu':'cardShadowClone',
+        'Sharingan Jutsu':'cardSharingan'
+      };
+      const id=map[jutsu];
+      if(id){ const el=document.getElementById(id); if(el){ el.classList.add('jutsu-active'); el.scrollIntoView({behavior:'smooth', block:'center'}); el.animate([{transform:'scale(1)'},{transform:'scale(1.03)'},{transform:'scale(1)'}],{duration:600}); }}
+    }
+
+    function checkJutsuMatch(){
+      const keys=Object.keys(jutsus);
+      const matched=keys.find(j=>{
+        if(predictions.length===jutsus[j].length) return jutsus[j].every((v,i)=> v===predictions[i]);
+        return false;
+      });
+      if(matched){
+        // sound
+        try{ const a=new Audio('naruto-handsign-recognition-main/naruto-handsign-recognition-main/assets/audio/jutsu.mp3'); a.volume=0.5; a.play().catch(()=>{});}catch(e){}
+        showHubJutsu(matched);
+      }
+    }
+    function showHubJutsu(name){
+      const icons={ "Rasengan":"🌀", "Chidori":"⚡", "Shadow Clone Jutsu":"👥", "Sharingan Jutsu":"👁️" };
+      const icon=icons[name]||"✨";
+      finishedContainer.textContent=icon+" "+name;
+      finishedContainer.style.visibility='visible';
+      finishedContainer.style.animation='jutsuHubPop 0.5s both';
+      // per-jutsu destination
+      const dest = {
+        "Rasengan":"rasengan-chidori.html",
+        "Chidori":"rasengan-chidori.html?jutsu=chidori",
+        "Shadow Clone Jutsu":"kage-bunshin-clone-me-main/index.html",
+        "Sharingan Jutsu":"sharingan.html"
+      };
+      const colors = { "Rasengan":"blue", "Chidori":"purple", "Shadow Clone Jutsu":"cyan", "Sharingan Jutsu":"red" };
+      setCardActive(name);
+
+      // Flash overlay matching original effects but on hub
+      const col = colors[name] || "blue";
+      // trigger particle flash on card already; for hub we also do mini effect
+      if(name==="Rasengan"){
+        hubRasenganEffect();
+      } else if(name==="Chidori"){
+        hubChidoriEffect();
+      } else if(name==="Shadow Clone Jutsu"){
+        hubCloneRedirectEffect();
+      } else if(name==="Sharingan Jutsu"){
+        hubSharinganVoiceEffect();
+      } else {
+        hubGenericEffect(name);
+      }
+
+      // auto redirect after delay for special redirect jutsus
+      if(dest[name]){
+        // Sharingan: inline voice, don't redirect immediately — show inline panel, then redirect after voice done? Instead show inline and offer redirect button
+        if(name==="Sharingan Jutsu"){
+          // show inline voice panel already handled; also after 1s offer to go to sharingan page
+          setTimeout(()=>{
+            const go = confirm("👁️ Sharingan awakened! Go to Sharingan dimension to summon eyes with voice?");
+            if(go) window.activateJutsu(dest[name], col);
+          }, 1800);
+        } else if(name==="Shadow Clone Jutsu"){
+          // for clone, auto redirect after showing clones
+          setTimeout(()=> window.activateJutsu(dest[name], col), 2200);
+        } else if(name==="Rasengan" || name==="Chidori"){
+          setTimeout(()=> {
+            const go = confirm(`${icon} ${name} activated! Enter ${name} AR dimension?`);
+            if(go) window.activateJutsu(dest[name], col);
+          }, 1600);
+        }
+      }
+
+      setTimeout(()=>{ finishedContainer.textContent=""; finishedContainer.style.visibility='hidden'; }, 3400);
+    }
+
+    // ── MINI HUB EFFECTS (lighter versions, no full-screen takeover except clone/sharingan) ──
+    function hubRasenganEffect(){
+      const layer=document.createElement("div");
+      layer.style.cssText="position:fixed; inset:0; pointer-events:none; z-index:9998; display:flex; align-items:center; justify-content:center;";
+      layer.innerHTML=`<div style="width:200px; height:200px; border-radius:50%; background:radial-gradient(circle at 30% 30%, #fff 0%, #87ceff 18%, #00bfff 45%, #004466 100%); box-shadow:0 0 40px #00bfff, 0 0 80px #00bfff; animation: spin-slow 1s linear infinite; display:flex; align-items:center; justify-content:center; font-size:3rem;">🌀</div>`;
+      document.body.appendChild(layer);
+      layer.animate([{opacity:0, transform:"scale(0.5)"},{opacity:1, transform:"scale(1)"}],{duration:400, easing:"ease-out"});
+      setTimeout(()=> { layer.animate([{opacity:1},{opacity:0}],{duration:400}).onfinish=()=> layer.remove(); }, 1600);
+      // sound
+      try{ const ac=new (window.AudioContext||window.webkitAudioContext)(), o=ac.createOscillator(), g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.setValueAtTime(220,ac.currentTime); o.frequency.linearRampToValueAtTime(80,ac.currentTime+0.6); g.gain.setValueAtTime(0.12,ac.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.7); o.start(); o.stop(ac.currentTime+0.7);}catch(e){}
+    }
+    function hubChidoriEffect(){
+      const layer=document.createElement("div");
+      layer.style.cssText="position:fixed; inset:0; pointer-events:none; z-index:9998; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at center, rgba(184,36,255,0.15), transparent 70%);";
+      layer.innerHTML=`<div style="width:190px; height:190px; border-radius:50%; background:radial-gradient(circle at 40% 30%, #fff 0%, #e0aaff 22%, #b824ff 55%, #2a0044 100%); box-shadow:0 0 40px #b824ff, 0 0 80px #b824ff; animation: chidoriFlickerHub 0.12s linear infinite; display:flex; align-items:center; justify-content:center; font-size:3rem; border:2px solid rgba(184,36,255,0.6);">⚡</div><style>@keyframes chidoriFlickerHub{0%,100%{opacity:1; filter:brightness(1)}50%{opacity:0.85; filter:brightness(1.25)}}</style>`;
+      document.body.appendChild(layer);
+      document.body.animate([{transform:"translate(0,0)"},{transform:"translate(2px,1px)"},{transform:"translate(-2px,-1px)"},{transform:"translate(0,0)"}],{duration:350});
+      layer.animate([{opacity:0, transform:"scale(0.6)"},{opacity:1, transform:"scale(1)"}],{duration:300});
+      setTimeout(()=> { layer.animate([{opacity:1},{opacity:0}],{duration:400}).onfinish=()=> layer.remove(); }, 1600);
+      try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); for(let i=0;i<5;i++){ const o=ac.createOscillator(),g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value=1000+Math.random()*600+i*150; g.gain.setValueAtTime(0.03, ac.currentTime+i*0.07); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+i*0.07+0.25); o.start(ac.currentTime+i*0.07); o.stop(ac.currentTime+i*0.07+0.25);} }catch(e){}
+    }
+    function hubCloneRedirectEffect(){
+      // smoke + 3 mini clones preview (hub version)
+      const overlay=document.createElement("div");
+      overlay.style.cssText="position:fixed; inset:0; z-index:9997; display:flex; align-items:center; justify-content:center; gap:14px; pointer-events:none; padding:20px; background:rgba(255,255,255,0.08); backdrop-filter:blur(2px);";
+      overlay.innerHTML=`
+        <div style="position:absolute; top:18%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); border:1px solid rgba(0,229,255,0.4); padding:12px 20px; border-radius:50px; color:#00e5ff; font-weight:800; letter-spacing:1px; text-align:center;">👥 SHADOW CLONE • REDIRECTING...<br><span style="font-size:0.7rem; color:#aaffff;">Tora → Saru → Uma → I → Release</span></div>
+        ${[1,2,3].map(n=> `<div style="flex:1; max-width:220px; aspect-ratio:4/3; border-radius:14px; background:radial-gradient(ellipse at center,#001122,#000); border:2px solid rgba(0,229,255,0.5); display:flex; align-items:center; justify-content:center; font-size:2.5rem; box-shadow:0 10px 30px rgba(0,229,255,0.25); animation: cloneHubIn 0.5s ${n*0.12}s both;">👥</div>`).join('')}
+        <style>@keyframes cloneHubIn{from{opacity:0; transform:scale(0.6) translateY(20px)}to{opacity:1; transform:scale(1) translateY(0)}}</style>
+      `;
+      document.body.appendChild(overlay);
+      const flash=document.createElement("div"); flash.style.cssText="position:fixed; inset:0; background:#00e5ff; opacity:0; z-index:9998; pointer-events:none;"; document.body.appendChild(flash);
+      flash.animate([{opacity:0},{opacity:0.6, offset:0.15},{opacity:0}],{duration:700}); setTimeout(()=> flash.remove(),800);
+      setTimeout(()=> { overlay.animate([{opacity:1},{opacity:0}],{duration:500}).onfinish=()=> overlay.remove(); }, 2100);
+    }
+    /* ═══════════════════════════════════════════
+       HUB SHARINGAN — CV2 REAL-TIME PUPIL DETECTION
+       Ported from Sharingan_Eyes_CV-main/sharingan.py
+       Uses OpenCV.js (cv2) → CascadeClassifier eye detect
+       Features: cv2 detection, 0.7 alpha overlay, blink(3 frames)->next, 720°/2.4 s rotation, audio per eye
+       ═══════════════════════════════════════════ */
+    function hubSharinganVoiceEffect(){
+      let layer=document.getElementById("hub-sharingan-layer");
+      if(layer) layer.remove();
+      layer=document.createElement("div");
+      layer.id="hub-sharingan-layer";
+      layer.style.cssText="position:fixed; inset:0; z-index:9998; background:rgba(10,0,0,0.78); backdrop-filter:blur(12px); display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;";
+      layer.innerHTML=`
+        <div style="background:rgba(18,0,0,0.96); border:1px solid rgba(255,26,26,0.35); border-radius:20px; max-width:860px; width:100%; overflow:hidden; box-shadow:0 20px 60px rgba(255,26,26,0.3), 0 0 0 1px rgba(255,255,255,0.04) inset; animation: sharinganHubIn 0.4s both; display:flex; flex-direction:column; max-height:92vh;">
+          <div style="padding:18px 20px 12px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.06); background:linear-gradient(180deg, rgba(255,26,26,0.08), transparent); flex-shrink:0;">
+            <div style="font-size:1.5rem; font-weight:900; color:#ff1a1a; text-shadow:0 0 15px #ff1a1a;">👁️ SHARINGAN — CV2 REAL-TIME</div>
+            <div style="color:#ffaaaa; font-size:0.7rem; letter-spacing:1.5px; margin-top:4px;">Mi → Tori → Ushi → Uma → I • <span style="color:#ff6b6b;">YOLO best.pt → cv2.CascadeClassifier</span> • Blink to cycle</div>
+            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+              <span style="background:rgba(255,26,26,0.15); border:1px solid rgba(255,26,26,0.3); padding:4px 10px; border-radius:50px; font-size:0.68rem; color:#ff8888;">cv2 • OpenCV.js</span>
+              <span style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:50px; font-size:0.68rem; color:#ccc;">scaling_factor=1.0</span>
+              <span style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:50px; font-size:0.68rem; color:#ccc;">blink 3 frames • 0.5 s cooldown</span>
+              <span style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:50px; font-size:0.68rem; color:#ccc;">720° @ 2.4 s</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: 1.45fr 0.9fr; gap:0; min-height:0; flex:1; overflow:hidden;">
+            <!-- CV LIVE -->
+            <div style="background:#000; position:relative; display:flex; flex-direction:column; min-height:280px; border-right:1px solid rgba(255,255,255,0.06);">
+              <div style="position:relative; flex:1; background:#000; overflow:hidden; min-height:220px;" id="hubCvStage">
+                <video id="hubCam" autoplay playsinline muted style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0;"></video>
+                <canvas id="hubCvCanvas" width="640" height="480" style="position:absolute; inset:0; width:100%; height:100%; display:block; background:#000; transform: scaleX(-1);"></canvas>
+                <canvas id="hubDbgCanvas" width="640" height="480" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none; transform: scaleX(-1);"></canvas>
+                <div style="position:absolute; top:8px; left:8px; display:flex; gap:6px; flex-wrap:wrap;">
+                  <span id="hubBadgeLive" style="background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.12); padding:4px 8px; border-radius:50px; font-size:0.68rem; font-weight:800; color:#ff6b6b;">● cv2 loading…</span>
+                  <span id="hubBadgeEyes" style="background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.12); padding:4px 8px; border-radius:50px; font-size:0.68rem; color:#ccc;">👁️ —</span>
+                  <span id="hubBadgeSh" style="background:rgba(255,26,26,0.18); backdrop-filter:blur(8px); border:1px solid rgba(255,26,26,0.3); padding:4px 8px; border-radius:50px; font-size:0.68rem; color:#ffaaaa;">🌀 Crimson Tomoe</span>
+                </div>
+                <div id="hubCvStatus" style="position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.12); padding:6px 10px; border-radius:50px; font-size:0.7rem; color:#fff; text-align:center; max-width:90%;">⏳ Loading OpenCV.js (cv2)…</div>
+              </div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; padding:10px; background:rgba(255,26,26,0.06); border-top:1px solid rgba(255,255,255,0.06); align-items:center; justify-content:center;">
+                <button id="hubCamStart" style="padding:7px 12px; border-radius:50px; border:none; background:linear-gradient(135deg,#ff1a1a,#cc0000); color:#fff; font-weight:800; font-size:0.75rem; cursor:pointer;">📷 Start CV</button>
+                <button id="hubCamStop" style="padding:7px 12px; border-radius:50px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.07); color:#fff; font-weight:600; font-size:0.75rem; cursor:pointer;">⏹ Stop</button>
+                <button id="hubNext" style="padding:7px 12px; border-radius:50px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:#fff; font-size:0.75rem; cursor:pointer;">⏭ Next</button>
+                <label style="display:flex; align-items:center; gap:4px; font-size:0.7rem; color:#aaa; cursor:pointer;"><input type="checkbox" id="hubDbg"> boxes</label>
+              </div>
+              <div style="padding:6px 10px 8px; text-align:center; font-size:0.65rem; color:#888; line-height:1.4; background:#000;">
+                <span style="color:#ff7777;">Blink firmly (≈200 ms) → next Sharingan</span> • Cooldown 0.5 s • Like <code style="background:rgba(255,26,26,0.12); padding:1px 4px; border-radius:4px;">consecutive_closed_frames>=3</code>
+              </div>
+            </div>
+            <!-- VOICE / GALLERY SIDE -->
+            <div style="background:rgba(12,0,0,0.5); padding:14px; overflow:auto; display:flex; flex-direction:column; gap:10px;">
+              <div style="text-align:center;">
+                <div id="hubShPrompt" style="color:#fff; font-weight:700; font-size:0.85rem;">🎤 Say number OR blink</div>
+                <div id="hubShListening" style="color:#ff4444; font-size:0.75rem; display:flex; align-items:center; justify-content:center; gap:6px; margin-top:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#ff1a1a;animation:pulse 1s infinite;display:inline-block;"></span> Listening + CV…</div>
+              </div>
+              <div style="display:flex; gap:6px; justify-content:center;">
+                <input id="hubEyeInput" type="number" min="1" max="10" placeholder="1-10" style="width:64px; padding:7px 10px; border-radius:50px; border:1px solid rgba(255,26,26,0.3); background:rgba(255,255,255,0.07); color:#fff; text-align:center; font-size:0.8rem;">
+                <button id="hubEyeBtn" style="padding:7px 14px; border-radius:50px; border:none; background:linear-gradient(135deg,#ff1a1a,#cc0000); color:#fff; font-weight:700; cursor:pointer; font-size:0.8rem;">AWAKEN</button>
+              </div>
+              <div id="hubEyesGrid" style="display:flex; flex-wrap:wrap; gap:7px; justify-content:center; min-height:84px; align-content:flex-start; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px;"></div>
+              <div style="font-size:0.65rem; color:#888; text-align:center; line-height:1.4;">Voice → grid • CV blink → overlay on pupils (70% alpha) • Both use same <code>EYE_DATA</code> & audio 1.mp3..10.mp3</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; justify-content:center; padding:12px; border-top:1px solid rgba(255,255,255,0.06); background:rgba(0,0,0,0.4); flex-wrap:wrap; flex-shrink:0;">
+            <button id="hubShGo" style="padding:9px 16px; border-radius:50px; border:none; background:#fff; color:#cc0000; font-weight:800; cursor:pointer;">↗ Full Sharingan CV Page</button>
+            <button id="hubShClose" style="padding:9px 14px; border-radius:50px; background:transparent; border:1px solid rgba(255,255,255,0.15); color:#aaa; cursor:pointer; font-size:0.8rem;">✕ Close</button>
+          </div>
+        </div>
+        <style>@keyframes sharinganHubIn{from{opacity:0; transform:scale(0.9) translateY(10px)}to{opacity:1; transform:scale(1) translateY(0)}} @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}} @keyframes eyeHubIn{from{opacity:0; transform:scale(0.3)}to{opacity:1; transform:scale(1)}}</style>
+      `;
+      document.body.appendChild(layer);
+
+      // ── Shared data (same as sharingan.py) ──
+      const EYE_FILES=["Crimson Tomoe.png","Blood Moon Sharingan.png","Inferno Wheel.png","Crimson Cyclone.png","Demon Spiral.png","Phantom Blade.png","Soul Reaper Eye.png","Eclipse Eye.png","Void Star.png","Celestial Rinnegan.png"];
+      const base="Sharingan_Eyes_CV-main/Sharingan_Eyes_CV-main/assets/"; const audioBase="Sharingan_Eyes_CV-main/Sharingan_Eyes_CV-main/audio/";
+      const imgs = EYE_FILES.map(f=>{ const im=new Image(); im.src=base+f; return im; });
+      let hub_current_index=0, hub_is_rotating=false, hub_rot_start=0, hub_angle=0, hub_last_trans=performance.now()/1000;
+      const hub_cooldown=0.5, hub_rot_dur=2.4, hub_rot_speed=720;
+      let hub_eyes_were_open=true, hub_closed_frames=0;
+      const CLOSED_THR=3; let hub_scaling=1.0;
+
+      const grid=layer.querySelector("#hubEyesGrid"), prompt=layer.querySelector("#hubShPrompt"), listening=layer.querySelector("#hubShListening"), input=layer.querySelector("#hubEyeInput"), btn=layer.querySelector("#hubEyeBtn"), close=layer.querySelector("#hubShClose"), goBtn=layer.querySelector("#hubShGo");
+      const hubCanvas=layer.querySelector("#hubCvCanvas"), hubDbg=layer.querySelector("#hubDbgCanvas"), hubVideo=layer.querySelector("#hubCam");
+      const hubCtx=hubCanvas.getContext('2d'), hubDbgCtx=hubDbg.getContext('2d');
+      const hubStatus=layer.querySelector("#hubCvStatus"), hubBadgeLive=layer.querySelector("#hubBadgeLive"), hubBadgeEyes=layer.querySelector("#hubBadgeEyes"), hubBadgeSh=layer.querySelector("#hubBadgeSh");
+      const hubStartBtn=layer.querySelector("#hubCamStart"), hubStopBtn=layer.querySelector("#hubCamStop"), hubNextBtn=layer.querySelector("#hubNext"), hubDbgChk=layer.querySelector("#hubDbg");
+
+      function hubUpdateBadge(){ hubBadgeSh.textContent="🌀 "+EYE_FILES[hub_current_index].replace('.png',''); }
+      hubUpdateBadge();
+      function hubPlayAudio(idx){ try{ const a=new Audio(audioBase+`${(idx%10)+1}.mp3`); a.volume=0.7; a.play().catch(()=>{}); hubBadgeSh.animate([{transform:'scale(1)'},{transform:'scale(1.06)'},{transform:'scale(1)'}],{duration:300}); }catch(e){} }
+      function hubTryTransition(){
+        const now=performance.now()/1000;
+        if(now - hub_last_trans >= hub_cooldown){
+          hub_current_index=(hub_current_index+1)%imgs.length; hub_is_rotating=true; hub_rot_start=now; hub_last_trans=now; hubUpdateBadge(); hubPlayAudio(hub_current_index); return true;
+        } return false;
+      }
+
+      close.onclick=()=> { hubStop(); layer.remove(); if(layer._rec) try{layer._rec.stop();}catch(e){} };
+      layer.onclick=(e)=>{ if(e.target===layer){ hubStop(); layer.remove(); } };
+      goBtn.onclick=()=> window.activateJutsu('sharingan.html','red');
+      hubNextBtn.onclick=()=> hubTryTransition();
+      hubDbgChk.onchange=(e)=>{ hubDbg.style.display=e.target.checked?'block':'none'; if(!e.target.checked) hubDbgCtx.clearRect(0,0,hubDbg.width,hubDbg.height); };
+      hubDbg.style.display='none';
+
+      function spawnEyes(n){
+        n=Math.max(1,Math.min(10,parseInt(n)||1));
+        grid.innerHTML=""; prompt.innerHTML=`🔥 <span style="color:#ff1a1a;">${n} Eye${n>1?'s':''} Awakened!</span>`; listening.style.display="none"; goBtn.style.display="inline-block";
+        for(let i=0;i<n;i++){
+          const card=document.createElement("div"); card.style.cssText=`width:62px; height:62px; border-radius:50%; overflow:hidden; border:2px solid rgba(255,26,26,0.6); box-shadow:0 0 10px rgba(255,26,26,0.4); background:#000; animation: eyeHubIn 0.4s ${i*0.07}s both; cursor:pointer; flex-shrink:0;`;
+          const img=document.createElement("img"); img.src=base+EYE_FILES[i%EYE_FILES.length]; img.style.cssText="width:100%; height:100%; object-fit:cover; animation: spin-slow 3s linear infinite;"; img.onerror=()=>{ img.style.display="none"; card.textContent="👁️"; card.style.display="flex"; card.style.alignItems="center"; card.style.justifyContent="center"; card.style.fontSize="1.4rem"; };
+          card.appendChild(img); card.onclick=()=>{ try{ const a=new Audio(audioBase+`${(i%10)+1}.mp3`); a.volume=0.7; a.play().catch(()=>{});}catch(e){} card.animate([{transform:"scale(1)"},{transform:"scale(1.12)"},{transform:"scale(1)"}],{duration:400}); };
+          grid.appendChild(card);
+        }
+        // also sync CV index to match voice choice? Mirror python where current_index follows blink, but voice chooses n for gallery. We keep separate.
+      }
+      btn.onclick=()=> spawnEyes(input.value); input.addEventListener("keydown",e=>{ if(e.key==="Enter") spawnEyes(input.value); });
+
+      // ── Voice (kept) ──
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(SR){
+        const rec=new SR(); rec.continuous=true; rec.interimResults=false; rec.lang="en-US";
+        const map={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,"1":1,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10};
+        rec.onresult=(e)=>{ const t=e.results[e.results.length-1][0].transcript.toLowerCase().trim(); prompt.innerHTML=`🎤 Heard: “<span style="color:#ff6666;">${t}</span>”`; for(let w in map){ if(t.includes(w)){ input.value=map[w]; spawnEyes(map[w]); listening.innerHTML=`<span style="color:#00ff88;">✓ ${map[w]} eyes</span>`; return; }} const m=t.match(/(\d+)/); if(m){ const v=parseInt(m[1]); if(v>=1&&v<=10){ input.value=v; spawnEyes(v); listening.innerHTML=`<span style="color:#00ff88;">✓ ${v} eyes</span>`; } } };
+        rec.onerror=()=>{ listening.innerHTML=`<span style="color:#ffaa00;">⚠️ Mic blocked</span>`; };
+        try{ rec.start(); layer._rec=rec; }catch(e){ listening.innerHTML=`<span style="color:#ffaa00;">⚠️ HTTPS required</span>`; }
+        close.addEventListener("click",()=>{ try{rec.stop();}catch(e){} });
+      } else listening.innerHTML=`<span style="color:#ffaa00;">⚠️ Voice not supported</span>`;
+
+      // ── CV2 (OpenCV.js) — LAZY LOADED to keep hub responsive (fixes Page Unresponsive) ──
+      let hubCvReady=false, hubEyeCascade=null, hubFaceCascade=null, hubEyeReady=false, hubFaceReady=false, hubRunning=false, hubRaf=null, hubStream=null;
+      let hubCvLoadingPromise=null;
+      let hubLastIris=[];
+      const HUB_CASCADE_URLS = {
+        eye: [
+          "https://cdn.jsdelivr.net/gh/opencv/opencv@4.8.0/data/haarcascades/haarcascade_eye.xml",
+          "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_eye.xml"
+        ],
+        face: [
+          "https://cdn.jsdelivr.net/gh/opencv/opencv@4.8.0/data/haarcascades/haarcascade_frontalface_default.xml",
+          "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
+        ]
+      };
+      function ensureHubOpenCV(){
+        if(typeof cv!=='undefined' && cv.Mat) return Promise.resolve();
+        if(hubCvLoadingPromise) return hubCvLoadingPromise;
+        hubStatus.innerHTML="⏳ Loading OpenCV.js (cv2)… ~8 MB — first time only";
+        hubCvLoadingPromise = new Promise((resolve, reject)=>{
+          // Define Module BEFORE script executes
+          window._cvRuntimeReady=false;
+          window._onCvRuntime=()=>{ window._cvRuntimeReady=true; resolve(); };
+          var Module={ onRuntimeInitialized: ()=>{ window._cvRuntimeReady=true; if(window._onCvRuntime) window._onCvRuntime(); } };
+          window.Module=Module;
+          const s=document.createElement('script');
+          s.src="https://docs.opencv.org/4.8.0/opencv.js";
+          s.async=true; s.id="opencv-js-hub";
+          s.onload=()=>{ console.log("opencv.js tag loaded, waiting runtime..."); };
+          s.onerror=()=>{
+            console.warn("docs opencv fail, trying cdn");
+            const s2=document.createElement('script');
+            s2.src="https://cdn.jsdelivr.net/npm/@opencv/opencv-js@4.8.0/opencv.js";
+            s2.async=true;
+            s2.onload=()=>{ setTimeout(()=>{ if(typeof cv!=='undefined'&&cv.Mat) resolve(); else reject(new Error("cdn fallback not ready")); },800); };
+            s2.onerror=()=> reject(new Error("opencv CDN failed"));
+            document.head.appendChild(s2);
+          };
+          document.head.appendChild(s);
+          // timeout after 18s
+          setTimeout(()=>{ if(typeof cv==='undefined') reject(new Error("opencv timeout")); }, 18000);
+        });
+        return hubCvLoadingPromise;
+      }
+      async function hubFetchWithFallback(urls, label){
+        let lastErr;
+        for(let u of urls){
+          try{ const r=await fetch(u,{cache:'force-cache'}); if(!r.ok) throw new Error(r.status); return await r.arrayBuffer(); }catch(e){ lastErr=e; console.warn(label+" fail "+u,e); }
+        }
+        throw lastErr||new Error(label+" all failed");
+      }
+      async function hubLoadCascade(urls, name){
+        const buf=await hubFetchWithFallback(urls, name);
+        const data=new Uint8Array(buf); cv.FS_createDataFile('/', name, data, true,false,false); return name;
+      }
+      function hubEyeToIris(eye, gray){
+        try{
+          const x=Math.max(0, Math.min(eye.x, gray.cols-10));
+          const y=Math.max(0, Math.min(eye.y, gray.rows-10));
+          const w=Math.max(16, Math.min(eye.width, gray.cols - x));
+          const h=Math.max(16, Math.min(eye.height, gray.rows - y));
+          if(w<14||h<14) return null;
+          const roiRect=new cv.Rect(x,y,w,h);
+          const roi=gray.roi(roiRect);
+          const blurred=new cv.Mat();
+          cv.medianBlur(roi, blurred, 5);
+          cv.GaussianBlur(blurred, blurred, new cv.Size(7,7), 0);
+          const circles=new cv.Mat();
+          const minR=Math.max(6, Math.floor(Math.min(w,h)*0.18));
+          const maxR=Math.max(10, Math.floor(Math.min(w,h)*0.25));
+          cv.HoughCircles(blurred, circles, cv.HOUGH_GRADIENT, 1, Math.max(w,h)/2.2, 80, 14, minR, maxR);
+          if(circles.cols>0){
+            const c=circles.data32F;
+            let cx=c[0], cy=c[1], r=c[2];
+            if(Math.abs(cx - w/2) < w*0.42 && Math.abs(cy - h/2) < h*0.45){
+              roi.delete(); blurred.delete(); circles.delete();
+              r=Math.max(minR, Math.min(r, maxR));
+              return {x:Math.round(x+cx-r), y:Math.round(y+cy-r), width:Math.round(r*2), height:Math.round(r*2), cx:Math.round(x+cx), cy:Math.round(y+cy), r:Math.round(r), eyeX:x, eyeY:y, eyeW:w, eyeH:h, isIris:true};
+            }
+          }
+          circles.delete();
+          const thresh=new cv.Mat();
+          cv.threshold(blurred, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+          const kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3,3));
+          cv.morphologyEx(thresh, thresh, cv.MORPH_OPEN, kernel); kernel.delete();
+          const contours=new cv.MatVector(); const hierarchy=new cv.Mat();
+          cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+          let best=null, bestArea=0;
+          for(let i=0;i<contours.size();i++){
+            const c=contours.get(i); const area=cv.contourArea(c); const eyeArea=w*h;
+            if(area < eyeArea*0.04 || area > eyeArea*0.25) continue;
+            const m=cv.moments(c); if(m.m00===0) continue;
+            const peri=cv.arcLength(c,true); const circ=4*Math.PI*area/(peri*peri);
+            if(circ < 0.38) continue;
+            if(area>bestArea){ bestArea=area; best=c; }
+          }
+          if(best){
+            const m=cv.moments(best); const cx=m.m10/m.m00, cy=m.m01/m.m00; const r=Math.sqrt(bestArea/Math.PI);
+            roi.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+            return {x:Math.round(x+cx-r), y:Math.round(y+cy-r), width:Math.round(r*2), height:Math.round(r*2), cx:Math.round(x+cx), cy:Math.round(y+cy), r:Math.round(r), eyeX:x, eyeY:y, eyeW:w, eyeH:h, isIris:true};
+          }
+          roi.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+        }catch(e){ console.warn("hub iris err",e); }
+        const estR=Math.max(10, Math.round(Math.min(eye.width, eye.height)*0.22));
+        const cx=Math.round(eye.x + eye.width*0.5); const cy=Math.round(eye.y + eye.height*0.5 + eye.height*0.06);
+        return {x:cx-estR, y:cy-estR, width:estR*2, height:estR*2, cx, cy, r:estR, eyeX:eye.x, eyeY:eye.y, eyeW:eye.width, eyeH:eye.height, isIris:false};
+      }
+      async function hubInitCv(){
+        // Lazy-load opencv first if needed
+        if(typeof cv==='undefined' || !cv.Mat){
+          hubStatus.innerHTML="⏳ Loading OpenCV.js (cv2)… ~8 MB";
+          try{ await ensureHubOpenCV(); // wait for runtime
+               // wait a bit for FS to be ready
+               for(let i=0;i<30;i++){ if(typeof cv.FS_createDataFile==='function') break; await new Promise(r=>setTimeout(r,100)); }
+          }catch(e){
+            console.error("hub lazy opencv load fail",e);
+            hubStatus.innerHTML=`❌ cv2 load failed: ${e.message}<br><a href='sharingan.html' style='color:#ffaaaa;'>Open dedicated CV page</a> — gallery voice still works`;
+            hubBadgeLive.textContent="● cv2 ERROR"; hubBadgeLive.style.color="#ff7777";
+            return;
+          }
+        }
+        try{
+          if(typeof cv==='undefined' || !cv.Mat) throw new Error("cv not ready");
+          hubStatus.innerHTML="⏳ cv2: loading <code>haarcascade_eye.xml</code>…";
+          hubEyeCascade=new cv.CascadeClassifier(); hubFaceCascade=new cv.CascadeClassifier();
+          await hubLoadCascade(HUB_CASCADE_URLS.eye,"hub_eye.xml"); await hubLoadCascade(HUB_CASCADE_URLS.face,"hub_face.xml");
+          hubEyeReady=hubEyeCascade.load("hub_eye.xml"); hubFaceReady=hubFaceCascade.load("hub_face.xml");
+          hubCvReady=true;
+          hubStatus.innerHTML="✅ cv2 ready — <span style='color:#00ff88;'>Start CV</span> auto";
+          hubBadgeLive.textContent="● cv2 READY"; hubBadgeLive.style.color="#00ff88"; hubBadgeLive.style.borderColor="rgba(0,255,136,0.3)"; hubBadgeLive.style.background="rgba(0,255,136,0.14)";
+          setTimeout(()=>{ if(!hubRunning) hubStart().catch(()=>{}); }, 300);
+        }catch(e){
+          console.error("hub cv init fail",e);
+          hubBadgeLive.textContent="● cv2 FALLBACK";
+          hubBadgeLive.style.background="rgba(255,193,7,0.18)"; hubBadgeLive.style.borderColor="rgba(255,193,7,0.35)"; hubBadgeLive.style.color="#ffd54f";
+          hubStatus.innerHTML=`⚠️ cv2 cascade failed: ${e.message}<br>Camera still works — detection fallback. <a href='sharingan.html' style='color:#ffaaaa;'>Full CV page</a>`;
+        }
+      }
+      // helper canvas for cv.Mat
+      const hubHelper=document.createElement('canvas'); const hubHelperCtx=hubHelper.getContext('2d', {willReadFrequently:true});
+      function hubDetect(){
+        const w=hubCanvas.width,h=hubCanvas.height;
+        hubHelper.width=w; hubHelper.height=h; hubHelperCtx.drawImage(hubVideo,0,0,w,h);
+        const imgData=hubHelperCtx.getImageData(0,0,w,h);
+        let src=cv.matFromImageData(imgData); let gray=new cv.Mat(); cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY); cv.equalizeHist(gray,gray);
+        let eyeRects=[];
+        try{
+          if(hubFaceReady && hubEyeCascade){
+            let faces=new cv.RectVector(); hubFaceCascade.detectMultiScale(gray, faces, 1.1,3,0,new cv.Size(70,70));
+            for(let i=0;i<faces.size();i++){
+              let face=faces.get(i); let roi=gray.roi(face); let eyes=new cv.RectVector();
+              hubEyeCascade.detectMultiScale(roi, eyes, 1.1,4,0,new cv.Size(20,20), new cv.Size(90,90));
+              for(let j=0;j<eyes.size();j++){
+                let e=eyes.get(j); if(e.y + e.height/2 > face.height*0.62) continue;
+                if(e.width < face.width*0.12 || e.width > face.width*0.48) continue;
+                eyeRects.push({x: face.x+e.x, y: face.y+e.y, width:e.width, height:e.height});
+              }
+              eyes.delete(); roi.delete();
+            }
+            faces.delete();
+            if(eyeRects.length===0 && hubEyeReady){
+              let eyes2=new cv.RectVector(); hubEyeCascade.detectMultiScale(gray, eyes2, 1.1,4,0,new cv.Size(26,26));
+              for(let i=0;i<eyes2.size();i++){ let e=eyes2.get(i); if(e.width> w*0.32) continue; eyeRects.push({x:e.x,y:e.y,width:e.width,height:e.height}); }
+              eyes2.delete();
+            }
+          } else if(hubEyeReady){
+            let eyes=new cv.RectVector(); hubEyeCascade.detectMultiScale(gray, eyes, 1.1,4,0,new cv.Size(28,28));
+            for(let i=0;i<eyes.size();i++){ let e=eyes.get(i); eyeRects.push({x:e.x,y:e.y,width:e.width,height:e.height}); }
+            eyes.delete();
+          }
+        }catch(e){ console.warn(e); }
+        if(eyeRects.length>4) eyeRects.sort((a,b)=>b.width*b.height-a.width*a.height), eyeRects=eyeRects.slice(0,4);
+        let filtered=[]; for(let r of eyeRects){ let keep=true; for(let f of filtered){ const ix=Math.max(0,Math.min(r.x+r.width,f.x+f.width)-Math.max(r.x,f.x)), iy=Math.max(0,Math.min(r.y+r.height,f.y+f.height)-Math.max(r.y,f.y)), inter=ix*iy, uni=r.width*r.height+f.width*f.height-inter; if(inter/uni>0.32){ keep=false; break; } } if(keep) filtered.push(r); }
+        eyeRects=filtered; if(eyeRects.length>2) eyeRects=eyeRects.slice(0,2);
+        eyeRects.sort((a,b)=>a.x-b.x);
+        let irisRects = eyeRects.map(e=> hubEyeToIris(e, gray)).filter(Boolean);
+        src.delete(); gray.delete();
+        // temporal smoothing (glued to eye)
+        irisRects = irisRects.map((cur,i)=>{
+          const prev=hubLastIris[i];
+          if(prev && Math.hypot(cur.cx-prev.cx, cur.cy-prev.cy) < cur.r*1.6){
+            const a=0.55; const cx=Math.round(prev.cx*(1-a)+cur.cx*a), cy=Math.round(prev.cy*(1-a)+cur.cy*a), r=Math.round(prev.r*(1-a)+cur.r*a);
+            return {...cur, x:cx-r, y:cy-r, width:r*2, height:r*2, cx, cy, r};
+          }
+          return cur;
+        });
+        hubLastIris=irisRects;
+        return irisRects;
+      }
+      function hubLoop(){
+        if(!hubRunning) return;
+        hubRaf=requestAnimationFrame(hubLoop);
+        const now=performance.now()/1000; const w=hubCanvas.width, h=hubCanvas.height;
+        hubCtx.clearRect(0,0,w,h); hubCtx.drawImage(hubVideo,0,0,w,h);
+        if(hub_is_rotating){ const el=now - hub_rot_start; if(el < hub_rot_dur) hub_angle=(hub_rot_speed*el)%360; else {hub_is_rotating=false; hub_angle=0;}}
+        let rects=[];
+        if(hubCvReady && hubEyeReady) rects=hubDetect();
+        let eyes_open=rects.length>0;
+        if(eyes_open){ if(!hub_eyes_were_open && hub_closed_frames>=CLOSED_THR) hubTryTransition(); hub_closed_frames=0; } else hub_closed_frames++;
+        hub_eyes_were_open=eyes_open;
+        hubBadgeEyes.textContent=`👁️ ${eyes_open? "OPEN":"CLOSED"} (${rects.length})`; hubBadgeEyes.style.color=eyes_open? "#00ff88":"#ffd54f"; hubBadgeEyes.style.borderColor=eyes_open? "rgba(0,255,136,0.3)":"rgba(255,193,7,0.3)"; hubBadgeEyes.style.background=eyes_open? "rgba(0,255,136,0.14)":"rgba(255,193,7,0.14)";
+        if(hubBadgeLive.textContent.includes("LIVE")){ /* keep */ } else if(hubRunning) hubBadgeLive.textContent="● LIVE — cv2";
+        hubDbgCtx.clearRect(0,0,w,h);
+        if(hubDbgChk.checked && rects.length){
+          hubDbgCtx.save();
+          rects.forEach(r=>{
+            if(r.eyeW){ hubDbgCtx.strokeStyle="rgba(255,255,255,0.5)"; hubDbgCtx.lineWidth=1; hubDbgCtx.setLineDash([4,4]); hubDbgCtx.strokeRect(r.eyeX,r.eyeY,r.eyeW,r.eyeH); }
+            hubDbgCtx.strokeStyle="rgba(255,215,0,0.9)"; hubDbgCtx.lineWidth=1; hubDbgCtx.setLineDash([6,3]); hubDbgCtx.strokeRect(r.x,r.y,r.width,r.height);
+            hubDbgCtx.strokeStyle="#00ff88"; hubDbgCtx.lineWidth=2; hubDbgCtx.setLineDash([]); hubDbgCtx.beginPath(); hubDbgCtx.arc(r.cx,r.cy,r.r,0,Math.PI*2); hubDbgCtx.stroke();
+            hubDbgCtx.fillStyle="#00ff88"; hubDbgCtx.beginPath(); hubDbgCtx.arc(r.cx,r.cy,1.8,0,Math.PI*2); hubDbgCtx.fill();
+          });
+          hubDbgCtx.restore();
+        }
+        const im=imgs[hub_current_index];
+        if(im && im.complete && rects.length){
+          for(let r of rects){
+            const baseD=r.width;
+            const scaledD=Math.max(12, Math.floor(baseD * hub_scaling));
+            const cx=r.cx, cy=r.cy;
+            hubCtx.save();
+            hubCtx.globalAlpha=0.92;
+            hubCtx.translate(cx, cy);
+            if(hub_is_rotating) hubCtx.rotate(hub_angle*Math.PI/180);
+            hubCtx.beginPath(); hubCtx.arc(0,0,scaledD/2,0,Math.PI*2); hubCtx.clip();
+            hubCtx.fillStyle="rgba(0,0,0,0.18)"; hubCtx.fillRect(-scaledD/2,-scaledD/2,scaledD,scaledD);
+            if(im.naturalWidth) hubCtx.drawImage(im, -scaledD/2, -scaledD/2, scaledD, scaledD);
+            else { hubCtx.fillStyle="#ff1a1a"; hubCtx.beginPath(); hubCtx.arc(0,0,scaledD/2,0,Math.PI*2); hubCtx.fill(); }
+            hubCtx.restore();
+            hubCtx.save(); hubCtx.strokeStyle="rgba(0,0,0,0.45)"; hubCtx.lineWidth=Math.max(1, scaledD*0.04); hubCtx.beginPath(); hubCtx.arc(cx,cy,scaledD/2,0,Math.PI*2); hubCtx.stroke(); hubCtx.restore();
+          }
+        }
+      }
+      async function hubStart(){
+        if(hubRunning) return;
+        try{
+          const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480}, facingMode:"user"}, audio:false});
+          hubVideo.srcObject=s; hubStream=s; await hubVideo.play();
+          const w=hubVideo.videoWidth||640,h=hubVideo.videoHeight||480; hubCanvas.width=w; hubCanvas.height=h; hubDbg.width=w; hubDbg.height=h;
+          hubRunning=true; hubStatus.style.display='none'; hubBadgeLive.textContent="● LIVE — cv2"; hubBadgeLive.style.background="rgba(255,26,26,0.18)"; hubBadgeLive.style.borderColor="rgba(255,26,26,0.35)"; hubBadgeLive.style.color="#ff6b6b";
+          hub_last_trans=performance.now()/1000; hub_eyes_were_open=true; hub_closed_frames=0;
+          hubLoop();
+        }catch(e){ hubStatus.style.display=''; hubStatus.innerHTML=`❌ Camera: ${e.message}<br>Allow camera & use HTTPS`; }
+      }
+      function hubStop(){
+        hubRunning=false; if(hubRaf) cancelAnimationFrame(hubRaf); hubRaf=null;
+        if(hubStream){ hubStream.getTracks().forEach(t=>t.stop()); hubStream=null; }
+        hubVideo.srcObject=null; hubCtx.clearRect(0,0,hubCanvas.width,hubCanvas.height); hubDbgCtx.clearRect(0,0,hubCanvas.width,hubCanvas.height);
+        hubLastIris=[];
+        if(hubStatus) { hubStatus.style.display=''; hubStatus.innerHTML="⏹ Stopped — <code>cap.release()</code>"; }
+        hubBadgeLive.textContent="● STOPPED"; hubBadgeLive.style.color="#ccc";
+      }
+      hubStartBtn.onclick=hubStart; hubStopBtn.onclick=hubStop;
+      // Lazily kick off cv load now (non-blocking, fixes Page Unresponsive). Camera usable instantly.
+      hubStatus.innerHTML="⏳ Click Start CV — cv2 loads on demand (~8 MB first time)";
+      // Defer heavy opencv download by 400ms so modal paints first (prevents jank)
+      setTimeout(()=>{ hubInitCv().catch(e=>console.warn("hubInitCv deferred fail",e)); }, 450);
+      // placeholder grid hint
+      grid.innerHTML=`<div style="color:#666; font-size:0.75rem; text-align:center; width:100%; padding:14px;">👁️ Voice → type number or say it<br><span style="color:#ff6666;">CV → blink in LEFT pane to overlay on real pupils</span></div>`;
+    }
+    function hubGenericEffect(name){
+      const el=document.createElement("div");
+      el.style.cssText="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:9998; background:rgba(0,0,0,0.75); backdrop-filter:blur(10px); border:1px solid rgba(255,148,50,0.3); padding:20px 28px; border-radius:20px; text-align:center; pointer-events:none;";
+      el.innerHTML=`<div style="font-size:2rem;">✨</div><div style="font-weight:900; color:#ff9432; font-size:1.4rem; margin-top:6px;">${name.toUpperCase()}!</div><div style="color:#fff; opacity:0.7; font-size:0.8rem; margin-top:4px;">${(window._jutsusMap[name]||[]).join(" → ")}</div>`;
+      document.body.appendChild(el);
+      el.animate([{opacity:0, transform:"translate(-50%,-50%) scale(0.8)"},{opacity:1, transform:"translate(-50%,-50%) scale(1)"}],{duration:400});
+      setTimeout(()=> el.animate([{opacity:1},{opacity:0}],{duration:400}).onfinish=()=> el.remove(), 2400);
+    }
+
+    // ── MAIN LOOP ──
+    async function init(){
+      try{
+        await createHandLandmarker();
+        await loadTM();
+        await loadJutsus();
+        await startWebcam();
+        // UI
+        const wrap=document.getElementById('widget-video-wrap');
+        wrap.style.opacity=1;
+        document.getElementById('webcam-container').style.opacity=1;
+        boxCanvas.width=CAM_W; boxCanvas.height=CAM_H; boxCanvas.style.width=CAM_W+'px'; boxCanvas.style.height=CAM_H+'px';
+        loadingCircle.style.width=wrap.offsetHeight+'px'; loadingCircle.style.height=wrap.offsetHeight+'px';
+        labelContainer.textContent='Show your hands...';
+        requestAnimationFrame(loop);
+      }catch(e){ console.error("Init failed hub",e); labelContainer.textContent="Camera blocked"; }
+    }
+    async function startWebcam(){
+      const flip=true; webcam=new tmImage.Webcam(CAM_W,CAM_H,flip); await webcam.setup(); await webcam.play();
+      // tmImage.Webcam creates a canvas; append
+      webcamContainer.appendChild(webcam.canvas);
+    }
+    async function loop(){
+      webcam.update();
+      await predict();
+      requestAnimationFrame(loop);
+    }
+    async function predict(){
+      const start=performance.now();
+      const results=detectHandsForVideo(webcam.canvas, start);
+      const rects=results.landmarks.map(lm=>{ const [minX,maxX,minY,maxY]=calculateHandBoundingBox(lm,results); return {minX,maxX,minY,maxY}; });
+      if(DRAW_BOX) boxCtx.clearRect(0,0,boxCanvas.width,boxCanvas.height);
+      procCtx.clearRect(0,0,procCanvas.width,procCanvas.height);
+      if(results.landmarks.length===0){
+        resetPredictions();
+      } else {
+        let target;
+        if(results.landmarks.length===1) target=rects[0];
+        else if(results.landmarks.length===2 && doRectanglesOverlap(rects[0],rects[1])){
+          target={ minX:Math.min(rects[0].minX,rects[1].minX), maxX:Math.max(rects[0].maxX,rects[1].maxX), minY:Math.min(rects[0].minY,rects[1].minY), maxY:Math.max(rects[0].maxY,rects[1].maxY) };
+        }
+        if(target){ await handlePrediction(target, results.landmarks); }
+      }
+    }
+    async function handlePrediction(rect, landmarks){
+      if(DRAW_BOX){
+        // draw box
+        boxCtx.strokeStyle='blue'; boxCtx.lineWidth=0.5; boxCtx.strokeRect(rect.minX*boxCanvas.width, rect.minY*boxCanvas.height, (rect.maxX-rect.minX)*boxCanvas.width, (rect.maxY-rect.minY)*boxCanvas.height);
+      }
+      processCanvas(rect,CAM_H,CAM_W,procCanvas,procCtx,webcam,landmarks);
+      const pred=await predictTM(procCanvas);
+      // manage threshold counter
+      if(pred===previousPrediction){
+        predictionCounter++;
+        if(predictionCounter>=threshold && predictions[predictions.length-1]!==pred){
+          predictions.push(pred);
+          labelContainer.textContent=pred;
+          checkJutsuMatch();
+        }
+      } else { predictionCounter=0; previousPrediction=pred; }
+      updateLoading(); updatePastLabels();
+      labelContainer.textContent=pred;
+    }
+
+    // inject small keyframes
+    const ks=document.createElement("style");
+    ks.textContent=`@keyframes jutsuHubPop{from{opacity:0; transform:scale(0.6)}to{opacity:1; transform:scale(1)}} @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes eyeHubIn{from{opacity:0; transform:scale(0.3)}to{opacity:1; transform:scale(1)}}`;
+    document.head.appendChild(ks);
+
+    init();
+  </script>
+</body>
+</html>

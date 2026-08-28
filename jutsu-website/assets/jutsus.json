@@ -1,0 +1,16 @@
+{
+  "Shadow Clone Jutsu": { "sequence": ["Inu", "Inu", "I"], "page": "shadow-clone.html" },
+  "Sharingan Jutsu": { "sequence": ["I", "Mi", "U"], "page": "sharingan.html" },
+  "Rasengan Jutsu": { "sequence": ["Saru", "Tori", "U"], "page": "rasengan.html" },
+  "Chidori Jutsu": { "sequence": ["Ushi", "Mi", "Saru"], "page": "chidori.html" },
+  "Fire Ball Jutsu": { "sequence": ["Tora", "Mi", "Tora"], "page": null },
+  "Water Strike Jutsu": { "sequence": ["Tori", "U", "Ne"], "page": null },
+  "Earth Wall Jutsu": { "sequence": ["Saru", "Tatsu", "Ushi"], "page": null },
+  "Fog Concealment Jutsu": { "sequence": ["Tori", "Mi", "Ne"], "page": null },
+  "Tornado Jutsu": { "sequence": ["Ushi", "Inu", "Tatsu"], "page": null },
+  "Ice Shard Jutsu": { "sequence": ["Saru", "Mi", "Release"], "page": null },
+  "Sandstorm Jutsu": { "sequence": ["Uma", "U", "Saru"], "page": null },
+  "Magma Eruption Jutsu": { "sequence": ["Tora", "Tatsu", "Ne"], "page": null },
+  "Tidal Wave Jutsu": { "sequence": ["Uma", "Inu", "Tori"], "page": null },
+  "Thunderstorm Jutsu": { "sequence": ["Uma", "Tora", "Mi"], "page": null }
+}

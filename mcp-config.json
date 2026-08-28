@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\Samrat\\Desktop\\rasengen\\mcp-retry-proxy\\index.js"
+      ],
+      "env": {
+        "TARGET_BASE_URL": "https://dbc-90184055-f8d5.cloud.databricks.com"
+      }
+    }
+  }
+}

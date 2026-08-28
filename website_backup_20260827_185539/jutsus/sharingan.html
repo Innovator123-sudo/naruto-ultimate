@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../assets/css/jutsu-page.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/konoha.png">
+  <title>Sharingan Awakening</title>
+  <style>
+    body.theme-eye {
+      background: radial-gradient(ellipse at center, #3a0606 0%, #1b0202 55%, #070000 100%);
+      color: #ff8f8f;
+    }
+
+    /* SHARINGAN */
+    .sharingan-wrap {
+      width: min(320px, 70vw);
+      margin: 0 auto 1em;
+      filter: drop-shadow(0 0 35px rgba(255, 30, 30, 0.65));
+      animation: eye-float 4s ease-in-out infinite;
+    }
+
+    .sharingan {
+      width: 100%;
+      height: auto;
+      border-radius: 50%;
+    }
+
+    .tomoe-group {
+      transform-origin: 150px 150px;
+      animation: eye-spin 9s linear infinite;
+    }
+
+    .tomoe {
+      opacity: 0.85;
+      transform-origin: 150px 150px;
+      transition: opacity 0.5s ease, filter 0.5s ease;
+    }
+
+    .sharingan.awakened .tomoe-group {
+      animation-duration: 2.2s;
+    }
+
+    .sharingan.awakened .tomoe {
+      opacity: 1;
+      filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.85));
+    }
+
+    .iris-glow {
+      opacity: 0.55;
+      transition: opacity 1s ease;
+    }
+
+    .sharingan.awakened .iris-glow {
+      opacity: 1;
+    }
+
+    @keyframes eye-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes eye-float {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-14px);
+      }
+    }
+
+    .eye-shake {
+      animation: eye-shake 0.5s ease !important;
+    }
+
+    @keyframes eye-shake {
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      20% {
+        transform: translateX(-14px) rotate(-3deg);
+      }
+
+      40% {
+        transform: translateX(12px) rotate(3deg);
+      }
+
+      60% {
+        transform: translateX(-8px);
+      }
+
+      80% {
+        transform: translateX(6px);
+      }
+    }
+
+    /* CHALLENGE */
+    .challenge-box {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 1.4em 1.8em;
+      border: 2px solid rgba(255, 90, 90, 0.5);
+      border-radius: 18px;
+      background: rgba(20, 0, 0, 0.55);
+      backdrop-filter: blur(4px);
+    }
+
+    .challenge-text {
+      font-size: clamp(1.05em, 2.6vw, 1.3em);
+      line-height: 1.6;
+      margin-bottom: 1em;
+    }
+
+    .challenge-text strong {
+      color: #ffd7d7;
+    }
+
+    #heard-status {
+      min-height: 1.4em;
+      font-style: italic;
+      color: #ffc4c4;
+      margin-bottom: 0.8em;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.9em;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .mic-button {
+      font-family: 'Lato', sans-serif;
+      font-size: 1.05em;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(180deg, #e02020, #7c0a0a);
+      border: none;
+      border-radius: 40px;
+      padding: 0.85em 1.9em;
+      cursor: pointer;
+      box-shadow: 0 0 22px rgba(255, 40, 40, 0.55);
+      transition: all 0.2s ease;
+    }
+
+    .mic-button:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 38px rgba(255, 60, 60, 0.85);
+    }
+
+    .mic-button.listening {
+      animation: mic-pulse 0.9s ease-in-out infinite;
+    }
+
+    @keyframes mic-pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 18px rgba(255, 40, 40, 0.55);
+      }
+
+      50% {
+        box-shadow: 0 0 46px rgba(255, 80, 80, 1);
+        transform: scale(1.05);
+      }
+    }
+
+    .answer-buttons {
+      display: flex;
+      gap: 0.6em;
+    }
+
+    .answer-buttons button {
+      width: 3em;
+      height: 3em;
+      font-family: 'Lato', sans-serif;
+      font-size: 1.15em;
+      font-weight: bold;
+      color: #ffbcbc;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 120, 120, 0.6);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .answer-buttons button:hover {
+      background: rgba(255, 60, 60, 0.75);
+      color: #fff;
+    }
+
+    .voice-note {
+      font-size: 0.85em;
+      opacity: 0.7;
+      margin-top: 0.9em;
+    }
+
+    #result-message {
+      margin-top: 1.1em;
+      font-size: clamp(1.3em, 3.5vw, 2em);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      min-height: 1.2em;
+      text-shadow: 0 0 20px currentColor;
+    }
+
+    .success-message {
+      color: #ffe3e3 !important;
+      animation: awaken-flash 1s ease-out;
+    }
+
+    @keyframes awaken-flash {
+      0% {
+        transform: scale(2.4);
+        opacity: 0;
+        filter: blur(14px);
+      }
+
+      60% {
+        transform: scale(1.15);
+        opacity: 1;
+        filter: blur(0);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    body.awakened-bg {
+      animation: bg-burst 1.2s ease-out;
+    }
+
+    @keyframes bg-burst {
+      0% {
+        filter: brightness(4) saturate(0.4);
+      }
+
+      100% {
+        filter: brightness(1);
+      }
+    }
+
+    .hidden-until-win {
+      display: none;
+      margin-top: 2.2em;
+    }
+
+    body.won .hidden-until-win {
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body class="theme-eye">
+  <h1 class="jutsu-title">Sharingan Jutsu</h1>
+
+  <div class="sharingan-wrap">
+    <svg class="sharingan" id="sharingan" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="scleraGrad" cx="42%" cy="36%" r="75%">
+          <stop offset="0%" stop-color="#ff5a5a" />
+          <stop offset="45%" stop-color="#c11212" />
+          <stop offset="100%" stop-color="#430101" />
+        </radialGradient>
+        <radialGradient id="pupilGrad" cx="42%" cy="36%" r="80%">
+          <stop offset="0%" stop-color="#3c0000" />
+          <stop offset="100%" stop-color="#050000" />
+        </radialGradient>
+        <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+          <stop offset="35%" stop-color="#ff9d9d" stop-opacity="0.5" />
+          <stop offset="100%" stop-color="#ff2020" stop-opacity="0" />
+        </radialGradient>
+        <path id="tomoePath"
+          d="M0,0 C-17,-6 -28,-21 -22,-35 C-16,-48 5,-47 10,-34 C15,-22 8,-8 0,0 Z" />
+      </defs>
+
+      <!-- OUTER RING -->
+      <circle cx="150" cy="150" r="142" fill="#0a0000" />
+      <circle cx="150" cy="150" r="136" fill="url(#scleraGrad)" />
+
+      <!-- GLOW LAYER (brightens when awakened) -->
+      <circle class="iris-glow" cx="150" cy="150" r="130" fill="url(#glowGrad)" />
+
+      <!-- TOMOE -->
+      <g class="tomoe-group">
+        <use class="tomoe" href="#tomoePath" fill="#160000" transform="rotate(-18 150 150) translate(150 92)" />
+        <use class="tomoe" href="#tomoePath" fill="#160000" transform="rotate(102 150 150) translate(150 92)" />
+        <use class="tomoe" href="#tomoePath" fill="#160000" transform="rotate(222 150 150) translate(150 92)" />
+      </g>
+
+      <!-- PUPIL -->
+      <circle cx="150" cy="150" r="30" fill="url(#pupilGrad)" stroke="#000" stroke-width="4" />
+      <circle cx="141" cy="141" r="7" fill="#ffffff" opacity="0.25" />
+
+      <!-- EDGE SHADING -->
+      <circle cx="150" cy="150" r="136" fill="none" stroke="#000" stroke-width="6" opacity="0.55" />
+    </svg>
+  </div>
+
+  <div class="challenge-box">
+    <div class="challenge-text">
+      The eye has chosen you... but it must be earned.<br>
+      <strong>Say out loud how many tomoe</strong> (eyes) the Sharingan has!
+    </div>
+    <div id="heard-status"></div>
+    <div class="controls">
+      <button class="mic-button" id="mic-button">&#127908; Say the Number</button>
+      <div class="answer-buttons">
+        <button data-count="1">1</button>
+        <button data-count="2">2</button>
+        <button data-count="3">3</button>
+      </div>
+    </div>
+    <div class="voice-note" id="voice-note">Tip: speak clearly into your microphone. Buttons work too.</div>
+    <div id="result-message"></div>
+  </div>
+
+  <a class="back-button hidden-until-win" href="../index.html">Return to Training</a>
+  <a class="back-button" id="give-up-link" style="margin-top:1.4em" href="../index.html">Give Up &amp; Return</a>
+
+  <script>
+    const CORRECT_COUNT = 3;
+
+    const sharingan = document.getElementById('sharingan');
+    const micButton = document.getElementById('mic-button');
+    const heardStatus = document.getElementById('heard-status');
+    const resultMessage = document.getElementById('result-message');
+    const voiceNote = document.getElementById('voice-note');
+    const answerButtons = document.querySelectorAll('.answer-buttons button');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    function awaken() {
+      if (document.body.classList.contains('won')) return;
+      document.body.classList.add('won', 'awakened-bg');
+      sharingan.classList.add('awakened');
+      resultMessage.textContent = 'SHARINGAN AWAKENED - THE EYE IS YOURS!';
+      resultMessage.classList.add('success-message');
+      heardStatus.textContent = '';
+      micButton.style.display = 'none';
+      answerButtons.forEach(b => b.disabled = true);
+
+      try { new Audio('../assets/audio/jutsu.mp3').play(); } catch (e) { }
+    };
+
+    function reject(countText) {
+      resultMessage.textContent = 'WRONG! The Sharingan rejects you...';
+      resultMessage.classList.remove('success-message');
+      sharingan.classList.remove('eye-shake');
+      void sharingan.offsetWidth;
+      sharingan.classList.add('eye-shake');
+      heardStatus.textContent = countText ? `"${countText}" ... are you even a shinobi?` : '';
+    };
+
+    function parseCount(transcript) {
+      const t = transcript.toLowerCase();
+      if (/three|3|tree|free/.test(t)) return 3;
+      if (/two|2|to|too|do/.test(t)) return 2;
+      if (/one|1|won|wan|once/.test(t)) return 1;
+      return NaN;
+    };
+
+    function attempt(value, sourceText) {
+      if (value === CORRECT_COUNT) {
+        awaken();
+      } else {
+        reject(sourceText);
+      }
+    };
+
+    // VOICE INPUT
+    if (!SpeechRecognition) {
+      voiceNote.textContent = 'Voice recognition is not supported in this browser - use the buttons below.';
+      micButton.style.display = 'none';
+    } else {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 3;
+
+      micButton.addEventListener('click', () => {
+        try {
+          heardStatus.textContent = 'Listening...';
+          micButton.classList.add('listening');
+          recognition.start();
+        } catch (e) { }
+      });
+
+      recognition.onresult = (event) => {
+        micButton.classList.remove('listening');
+        const transcript = event.results[0][0].transcript;
+        heardStatus.textContent = `You said: "${transcript}"`;
+        const count = parseCount(transcript);
+        attempt(isNaN(count) ? null : count, transcript);
+      };
+
+      recognition.onerror = (event) => {
+        micButton.classList.remove('listening');
+        if (event.error === 'not-allowed') {
+          heardStatus.textContent = 'Microphone blocked - allow mic access or use the buttons.';
+        } else {
+          heardStatus.textContent = 'Could not hear you... try again!';
+        }
+      };
+
+      recognition.onend = () => micButton.classList.remove('listening');
+    }
+
+    // BUTTON FALLBACK
+    answerButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        heardStatus.textContent = '';
+        attempt(parseInt(button.dataset.count, 10));
+      });
+    });
+  </script>
+</body>
+
+</html>

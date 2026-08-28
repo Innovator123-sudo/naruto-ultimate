@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Rasengan & Chidori AR — Open your palms to summon chakra powers using real-time hand tracking.">
+  <title>🌀 Rasengan & ⚡ Chidori — Hand Tracking AR</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    .ar-container {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #v_src, #out {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #out { z-index: 2; pointer-events: none; }
+
+    .fx {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1000px;
+      max-width: 85vw;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: none;
+      display: none;
+      mix-blend-mode: screen;
+      z-index: 20;
+    }
+    @media (max-width:768px){
+      .fx{ width: 600px; }
+      #combat_log{ top:10px; left:10px; right:10px; padding:8px 12px; }
+      .camera-hint{ bottom:10px; padding:6px 14px; font-size:0.72rem; max-width:90vw; text-align:center; }
+    }
+
+    #combat_log {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 50;
+      background: rgba(5, 0, 15, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-left: 5px solid var(--chidori-purple);
+      padding: 12px 20px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s var(--ease-spring);
+    }
+
+    .log-title {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .log-msg {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      color: var(--chidori-purple);
+      text-shadow: 0 0 10px var(--chidori-purple);
+      transition: all 0.3s ease;
+      letter-spacing: 1px;
+    }
+
+    #combat_log.state-chidori {
+      border-left-color: var(--chidori-purple);
+      box-shadow: 0 0 20px rgba(184, 36, 255, 0.3);
+    }
+    #combat_log.state-chidori .log-msg {
+      color: var(--chidori-purple);
+      text-shadow: 0 0 10px var(--chidori-purple);
+    }
+
+    #combat_log.state-rasengan {
+      border-left-color: var(--orange-accent);
+      box-shadow: 0 0 20px rgba(255, 136, 0, 0.3);
+    }
+    #combat_log.state-rasengan .log-msg {
+      color: var(--orange-accent);
+      text-shadow: 0 0 10px var(--orange-accent);
+    }
+
+    #combat_log.state-clash {
+      border-left-color: #ff1100;
+      animation: shake-violent 0.3s infinite;
+    }
+    #combat_log.state-clash .log-msg {
+      color: #ff3333;
+      text-shadow: 0 0 15px #ff1100;
+    }
+
+    .camera-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      background: rgba(5, 0, 15, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      backdrop-filter: blur(8px);
+      font-family: 'Outfit', sans-serif;
+      animation: fade-in-up 1s 1.5s var(--ease-out) both;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <!-- Header -->
+    <header class="page-header">
+      <a href="index.html" class="back-btn" id="backBtn">
+        ← Back to Jutsu Hub
+      </a>
+      <h1 class="page-title">🌀 Rasengan & ⚡ Chidori</h1>
+      <div></div>
+    </header>
+
+    <!-- AR Container -->
+    <div class="ar-container">
+      <video id="v_src" autoplay playsinline></video>
+      <canvas id="out"></canvas>
+
+      <div id="combat_log" class="state-idle">
+        <div class="log-title">JUTSU STATUS</div>
+        <div id="log_message" class="log-msg">// STANDBY</div>
+      </div>
+      <div id="soundPrompt" style="position:absolute; top:70px; right:12px; z-index:60; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15); padding:6px 12px; border-radius:50px; font-size:0.72rem; color:#aaffff; backdrop-filter:blur(8px); cursor:pointer; display:flex; align-items:center; gap:6px;" onclick="unlockAudio(); this.style.display='none'">🔊 Tap to enable sound</div>
+
+      <video id="vid_rasengan" class="fx" src="assets/jeet_left_aura.mp4" muted autoplay playsinline></video>
+      <video id="vid_chidori" class="fx" src="assets/jeet_right_aura.mp4" muted autoplay playsinline></video>
+
+      <div class="camera-hint">
+        ✋ Open your palms toward the camera to activate chakra
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Mobile detection for performance ──
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768 || navigator.maxTouchPoints > 1 && window.innerWidth < 1024;
+
+    // Determine which jutsu to show from URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    const jutsuMode = urlParams.get('jutsu') || 'rasengan';
+    const isChidori = jutsuMode.toLowerCase() === 'chidori';
+
+    // Update page title and header based on mode
+    document.title = isChidori ? '⚡ Chidori — Hand Tracking AR' : '🌀 Rasengan — Hand Tracking AR';
+    document.querySelector('.page-title').innerHTML = isChidori ? '⚡ Chidori' : '🌀 Rasengan';
+    document.querySelector('.camera-hint').innerHTML = isChidori
+      ? '✋ Open your palms to activate Chidori lightning — allow sound on first tap'
+      : '✋ Open your palms to activate Rasengan chakra — tap screen to enable sound';
+
+    const vElement = document.getElementById('v_src');
+    const cElement = document.getElementById('out');
+    const ctx = cElement.getContext('2d', { willReadFrequently: true });
+
+    const vidRasengan = document.getElementById('vid_rasengan');
+    const vidChidori = document.getElementById('vid_chidori');
+    const combatLog = document.getElementById('combat_log');
+    const logMessage = document.getElementById('log_message');
+
+    // ── Sound system — robust on GitHub Pages + mobile (unlock on gesture + synth fallback) ──
+    // Audio files may not exist, so we rely heavily on Web Audio synth fallback
+    const rasenganAudio = new Audio('assets/audio/rasengan.mp3');
+    const chidoriAudio = new Audio('assets/audio/chidori.mp3');
+    rasenganAudio.preload = 'none'; chidoriAudio.preload = 'none';
+    rasenganAudio.loop = true; chidoriAudio.loop = true;
+    rasenganAudio.volume = 0.5; chidoriAudio.volume = 0.5;
+    rasenganAudio.crossOrigin = 'anonymous'; chidoriAudio.crossOrigin = 'anonymous';
+    // Preload with error handling - if files don't exist, synth will be used
+    rasenganAudio.onerror = () => { console.log('Rasengan audio not found, using synth'); };
+    chidoriAudio.onerror = () => { console.log('Chidori audio not found, using synth'); };
+
+    // Prefetch alternative paths for GH Pages subpath robustness
+    const altBase = window.location.href;
+    // Web Audio synth fallback
+    let audioCtx = null, masterGain = null, audioUnlocked = false;
+    function getAC(){
+      if(!audioCtx){
+        audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        masterGain = audioCtx.createGain(); masterGain.gain.value = 0.7; masterGain.connect(audioCtx.destination);
+      }
+      return audioCtx;
+    }
+    async function ensureResumed(){ const ac=getAC(); if(ac.state==='suspended') try{ await ac.resume(); }catch(e){} return ac; }
+    function unlockAudio(){
+      if(audioUnlocked) return;
+      const ac=getAC(); ac.resume().catch(()=>{});
+      try{ const buf=ac.createBuffer(1,1,22050); const s=ac.createBufferSource(); s.buffer=buf; s.connect(masterGain||ac.destination); s.start(0);}catch(e){}
+      audioUnlocked=true;
+      try{ const sp=document.getElementById('soundPrompt'); if(sp) sp.style.display='none'; }catch(e){}
+      try{ rasenganAudio.load(); chidoriAudio.load();
+        // prime both with gesture (iOS requires play() inside gesture)
+        const p1=rasenganAudio.play(); if(p1&&p1.then) p1.then(()=>{rasenganAudio.pause();rasenganAudio.currentTime=0;}).catch(()=>{});
+        const p2=chidoriAudio.play(); if(p2&&p2.then) p2.then(()=>{chidoriAudio.pause();chidoriAudio.currentTime=0;}).catch(()=>{});
+      }catch(e){}
+    }
+    ['click','touchstart','pointerdown','keydown'].forEach(ev=>{
+      document.addEventListener(ev, unlockAudio, {once:true, passive:true});
+      document.addEventListener(ev, ()=>{ if(audioCtx && audioCtx.state==='suspended') ensureResumed(); }, {passive:true});
+    });
+    // Also unlock on video/container tap
+    document.querySelector('.ar-container')?.addEventListener('touchstart', unlockAudio, {once:true, passive:true});
+
+    function synthRasengan(){
+      try{
+        const ac=getAC(); if(!audioUnlocked) unlockAudio(); ensureResumed();
+        const now=ac.currentTime;
+        const o=ac.createOscillator(), g=ac.createGain(), f=ac.createBiquadFilter();
+        f.type='lowpass'; f.frequency.value=900; f.Q.value=1;
+        o.connect(f); f.connect(masterGain);
+        o.type='sine'; o.frequency.setValueAtTime(85,now); o.frequency.linearRampToValueAtTime(110,now+0.8);
+        g.gain.setValueAtTime(0.14, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.9);
+        o.start(now); o.stop(now+0.9);
+        // harmonic
+        const o2=ac.createOscillator(), g2=ac.createGain();
+        o2.connect(g2); g2.connect(masterGain);
+        o2.type='triangle'; o2.frequency.setValueAtTime(170,now);
+        g2.gain.setValueAtTime(0.06,now); g2.gain.exponentialRampToValueAtTime(0.001, now+0.6);
+        o2.start(now); o2.stop(now+0.6);
+      }catch(e){}
+    }
+    function synthChidori(){
+      try{
+        const ac=getAC(); ensureResumed(); if(!audioUnlocked) unlockAudio();
+        const now=ac.currentTime;
+        // 1000 birds chirping: rapid short grains at varying pitch
+        for(let i=0;i<7;i++){
+          const o=ac.createOscillator(), g=ac.createGain();
+          o.connect(g); g.connect(masterGain);
+          o.type='square';
+          o.frequency.setValueAtTime(1200+Math.random()*900+i*120, now+i*0.07);
+          o.frequency.exponentialRampToValueAtTime(2200, now+i*0.07+0.14);
+          g.gain.setValueAtTime(0.05, now+i*0.07); g.gain.exponentialRampToValueAtTime(0.001, now+i*0.07+0.18);
+          o.start(now+i*0.07); o.stop(now+i*0.07+0.19);
+        }
+        // crackle noise
+        const len=ac.sampleRate*0.25, buf=ac.createBuffer(1,len,ac.sampleRate), d=buf.getChannelData(0);
+        for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*0.08*Math.pow(1-i/len,2);
+        const n=ac.createBufferSource(); n.buffer=buf;
+        const ng=ac.createGain(), bp=ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2400; bp.Q.value=0.9;
+        n.connect(bp); bp.connect(ng); ng.connect(masterGain);
+        ng.gain.setValueAtTime(0.16, now); ng.gain.exponentialRampToValueAtTime(0.001, now+0.25);
+        n.start(now); n.stop(now+0.25);
+      }catch(e){}
+    }
+    async function playRasenganSound(){
+      await ensureResumed(); if(!audioUnlocked) unlockAudio();
+      try{ rasenganAudio.currentTime=0; const p=rasenganAudio.play(); if(p&&p.then) await p.catch(()=>{ throw 0; }); return true; }catch(e){ synthRasengan(); return false; }
+    }
+    async function playChidoriSound(){
+      await ensureResumed(); if(!audioUnlocked) unlockAudio();
+      // try chidori.mp3 with multiple fallbacks (GitHub Pages subpath)
+      const candidates=[chidoriAudio.src, new URL('chidori.mp3', altBase).href, new URL('./chidori.mp3', altBase).href, new URL('/naruto-ultimate/chidori.mp3', location.origin).href];
+      for(let src of candidates){
+        try{ if(chidoriAudio.src!==src) chidoriAudio.src=src; chidoriAudio.currentTime=0; chidoriAudio.volume=0.85;
+          const p=chidoriAudio.play(); if(p&&p.then) await p; return true; }catch(e){}
+      }
+      synthChidori(); return false;
+    }
+    function stopAllAudio(){
+      try{ rasenganAudio.pause(); }catch(e){}
+      try{ chidoriAudio.pause(); }catch(e){}
+    }
+
+    // Hide the unused video element
+    if (isChidori) {
+      vidRasengan.style.display = 'none';
+      vidRasengan.pause();
+      try{ vidRasengan.removeAttribute('src'); vidRasengan.load(); }catch(e){}
+    } else {
+      vidChidori.style.display = 'none';
+      vidChidori.pause();
+      try{ vidChidori.removeAttribute('src'); vidChidori.load(); }catch(e){}
+    }
+
+    let wasOpen = [false, false];
+    let jutsuScale = [1.0, 1.0];
+    let timeApp = 0;
+    let audioPlayingForOpen = false;
+
+    const RASENGAN_LOOP_POINT = 3.4;
+    const CHIDORI_LOOP_POINT = 0;
+
+    vidRasengan.addEventListener('ended', () => {
+      vidRasengan.currentTime = RASENGAN_LOOP_POINT;
+      vidRasengan.play().catch(()=>{});
+    });
+
+    vidChidori.addEventListener('ended', () => {
+      vidChidori.currentTime = CHIDORI_LOOP_POINT;
+      vidChidori.play().catch(()=>{});
+    });
+
+    function checkOpen(pts) {
+      let count = 0;
+      const wrist = pts[0];
+      const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+      for (let i = 0; i < tips.length; i++) {
+        if (Math.hypot(pts[tips[i]].x - wrist.x, pts[tips[i]].y - wrist.y) >
+            Math.hypot(pts[pips[i]].x - wrist.x, pts[pips[i]].y - wrist.y)) count++;
+      }
+      return count >= 3;
+    }
+
+    function onResults(res) {
+      cElement.width = vElement.videoWidth;
+      cElement.height = vElement.videoHeight;
+
+      ctx.save();
+      ctx.clearRect(0, 0, cElement.width, cElement.height);
+      ctx.drawImage(res.image, 0, 0, cElement.width, cElement.height);
+
+      timeApp += 0.05;
+      let showEffect = false;
+
+      // Hide both by default each frame
+      vidRasengan.style.display = 'none';
+      vidChidori.style.display = 'none';
+
+      // Pick the active video element based on mode
+      const activeVid = isChidori ? vidChidori : vidRasengan;
+      const loopPoint = isChidori ? CHIDORI_LOOP_POINT : RASENGAN_LOOP_POINT;
+      const skelColorActive = isChidori ? '#b824ff' : '#ff8800';
+      const skelShadowActive = isChidori ? '#e024ff' : '#ffaa00';
+      const stateClass = isChidori ? 'state-chidori' : 'state-rasengan';
+      const activeMsg = isChidori ? '⚡ ACTIVATING CHIDORI ⚡' : '🌪️ RASEN SHURIKEN ACTIVE 🌪️';
+
+      if (res.multiHandLandmarks && res.multiHandedness) {
+        res.multiHandLandmarks.forEach((pts, i) => {
+          const label = res.multiHandedness[i].label;
+          const isPhysicalRight = label === 'Left';
+          const idx = isPhysicalRight ? 1 : 0;
+          const open = checkOpen(pts);
+
+          let skelColor = open ? skelColorActive : 'rgba(255, 255, 255, 0.2)';
+          let skelShadow = open ? skelShadowActive : 'transparent';
+
+          ctx.save();
+          ctx.shadowBlur = open ? 15 : 0;
+          ctx.shadowColor = skelShadow;
+          drawConnectors(ctx, pts, HAND_CONNECTIONS, {color: skelColor, lineWidth: open ? 4 : 2});
+          drawLandmarks(ctx, pts, {color: '#ffffff', lineWidth: 1, radius: open ? 3 : 2});
+          ctx.restore();
+
+          const wrist = pts[0], knk = pts[9];
+          const tx = (wrist.x + knk.x) / 2, ty = (wrist.y + knk.y) / 2;
+
+          if (open) {
+            if (!wasOpen[idx]) {
+              jutsuScale[idx] = 0.8;
+              activeVid.currentTime = 0;
+              activeVid.play().catch(()=>{});
+              // Robust sound with unlock + synth fallback (fixes GH Pages + mobile block)
+              if (!audioPlayingForOpen) {
+                audioPlayingForOpen = true;
+                if (isChidori) playChidoriSound();
+                else playRasenganSound();
+              }
+            }
+            jutsuScale[idx] = Math.min(isMobile?1.9:2.5, jutsuScale[idx] + (isMobile?0.01:0.015));
+            activeVid.style.transform = `translate(-50%, -50%) scale(${jutsuScale[idx]})`;
+            // Use canvas element size for positioning (responsive, fixes phone misalign)
+            const rect = cElement.getBoundingClientRect();
+            const cx = (1 - tx) * rect.width;
+            const cy = ty * rect.height;
+            activeVid.style.left = `${cx}px`;
+            activeVid.style.top = `${cy - (isChidori?0: (isMobile?60:90))}px`;
+            // chidori adds screen shake for punch
+            if(isChidori && !wasOpen[idx]) {
+              document.body.animate([{transform:'translate(0,0)'},{transform:'translate(1px,0.5px)'},{transform:'translate(-1px,-0.5px)'},{transform:'translate(0,0)'}],{duration:180});
+            }
+            activeVid.style.display = 'block';
+            showEffect = true;
+          } else {
+            // hand closed -> ensure audio will restart on next open
+            if (wasOpen[idx]) audioPlayingForOpen = false;
+          }
+          wasOpen[idx] = open;
+        });
+      }
+
+      if (showEffect) {
+        combatLog.className = stateClass;
+        logMessage.innerText = activeMsg;
+      } else {
+        combatLog.className = 'state-idle';
+        logMessage.innerText = "// STANDBY";
+        if(audioPlayingForOpen){ // all hands closed
+          let stillOpen = wasOpen.some(v=>v);
+          if(!stillOpen){ stopAllAudio(); audioPlayingForOpen=false; }
+        }
+      }
+
+      ctx.restore();
+    }
+
+    const h = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    h.setOptions({
+      maxNumHands: 2,
+      modelComplexity: isMobile ? 0 : 1,
+      minDetectionConfidence: isMobile ? 0.65 : 0.75,
+      minTrackingConfidence: isMobile ? 0.65 : 0.75
+    });
+    h.onResults(onResults);
+
+    const cam = new Camera(vElement, {
+      onFrame: async () => { await h.send({ image: vElement }); },
+      width: isMobile ? 480 : 640,
+      height: isMobile ? 360 : 480
+    });
+    cam.start();
+  </script>
+
+</body>
+</html>
+

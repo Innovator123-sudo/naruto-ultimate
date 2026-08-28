@@ -1,0 +1,12 @@
+{
+  "name": "mcp-retry-proxy",
+  "version": "1.0.0",
+  "description": "MCP server that auto-retries Databricks chat completions on REQUEST_LIMIT_EXCEEDED",
+  "main": "index.js",
+  "bin": {
+    "mcp-retry-proxy": "./index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
