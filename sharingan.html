@@ -786,10 +786,11 @@ function loop(){
     for(let r of rects){
       // r is iris square (diameter = 2*r.r) — already pupil-centered. Scale by slider like python scaling_factor.
       const baseD = r.width; // = 2*r.r, iris diameter
-      const scaledD = Math.max(12, Math.floor(baseD * scaling_factor));
+      // Use 85% of iris diameter to ensure sharingan fits perfectly within eyeball without spilling
+      const scaledD = Math.max(12, Math.floor(baseD * scaling_factor * 0.85));
       const cx = r.cx;
       const cy = r.cy;
-      // Slight vertical nudge for natural eye perspective: iris sits a touch above eye center
+      // Perfect eye alignment: center exactly on iris with slight perspective adjustment
       const drawCx = cx;
       const drawCy = cy;
       ctx.save();
@@ -811,13 +812,14 @@ function loop(){
         ctx.fillStyle="#fff"; ctx.font=`${scaledD*0.3}px serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("👁️",0,0);
       }
       ctx.restore();
-      // outer iris ring for realism (thin dark border)
+      // outer iris ring for realistic depth (subtle border around sharingan)
       ctx.save();
-      ctx.strokeStyle="rgba(0,0,0,0.45)"; ctx.lineWidth=Math.max(1, scaledD*0.04);
-      ctx.beginPath(); ctx.arc(drawCx, drawCy, scaledD/2, 0, Math.PI*2); ctx.stroke();
-      // inner highlight
-      ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.arc(drawCx, drawCy, scaledD*0.48, 0, Math.PI*2); ctx.stroke();
+      ctx.translate(drawCx, drawCy);
+      ctx.strokeStyle="rgba(139, 0, 0, 0.6)";
+      ctx.lineWidth = scaledD * 0.05;
+      ctx.beginPath();
+      ctx.arc(0, 0, scaledD/2, 0, Math.PI*2);
+      ctx.stroke();
       ctx.restore();
     }
   }
