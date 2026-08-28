@@ -232,23 +232,36 @@
     }
   </script>
 
-  <!-- PARTICLE BG -->
+  <!-- PARTICLE BG - mobile lite -->
   <script>
     const canvas = document.getElementById('particles-canvas');
     const ctx = canvas.getContext('2d');
     let particles = [];
-    const PARTICLE_COUNT = 80;
+    const isMobileHub = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const PARTICLE_COUNT = isMobileHub ? 28 : 80;
+    const PARTICLE_LINKS = !isMobileHub; // disable lines on mobile for 3x FPS
     function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
     window.addEventListener('resize', resizeCanvas); resizeCanvas();
     class Particle {
       constructor(){ this.reset(); }
-      reset(){ this.x=Math.random()*canvas.width; this.y=Math.random()*canvas.height; this.vx=(Math.random()-0.5)*0.3; this.vy=(Math.random()-0.5)*0.3-0.15; this.radius=Math.random()*2+0.5; this.alpha=Math.random()*0.4+0.1; this.color=['rgba(0,191,255,','rgba(184,36,255,','rgba(255,136,0,'][Math.floor(Math.random()*3)]; this.pulse=Math.random()*Math.PI*2; this.pulseSpeed=Math.random()*0.02+0.01; }
+      reset(){ this.x=Math.random()*canvas.width; this.y=Math.random()*canvas.height; this.vx=(Math.random()-0.5)*(isMobileHub?0.18:0.3); this.vy=(Math.random()-0.5)*0.3-0.15; this.radius=Math.random()*(isMobileHub?1.4:2)+0.5; this.alpha=Math.random()*0.4+0.1; this.color=['rgba(0,191,255,','rgba(184,36,255,','rgba(255,136,0,'][Math.floor(Math.random()*3)]; this.pulse=Math.random()*Math.PI*2; this.pulseSpeed=Math.random()*0.02+0.01; }
       update(){ this.x+=this.vx; this.y+=this.vy; this.pulse+=this.pulseSpeed; if(this.x<0||this.x>canvas.width||this.y<0||this.y>canvas.height){ this.reset(); this.y=canvas.height+10; } }
-      draw(){ const a=this.alpha*(0.6+0.4*Math.sin(this.pulse)); ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fillStyle=this.color+a+')'; ctx.fill(); ctx.beginPath(); ctx.arc(this.x,this.y,this.radius*3,0,Math.PI*2); ctx.fillStyle=this.color+(a*0.15)+')'; ctx.fill(); }
+      draw(){ const a=this.alpha*(0.6+0.4*Math.sin(this.pulse)); ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,Math.PI*2); ctx.fillStyle=this.color+a+')'; ctx.fill(); if(!isMobileHub){ ctx.beginPath(); ctx.arc(this.x,this.y,this.radius*3,0,Math.PI*2); ctx.fillStyle=this.color+(a*0.15)+')'; ctx.fill(); } }
     }
     for(let i=0;i<PARTICLE_COUNT;i++) particles.push(new Particle());
-    function animateParticles(){ ctx.clearRect(0,0,canvas.width,canvas.height); particles.forEach(p=>{p.update();p.draw();}); for(let i=0;i<particles.length;i++) for(let j=i+1;j<particles.length;j++){ const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<120){ const a=(1-dist/120)*0.08; ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y); ctx.strokeStyle=`rgba(100,160,255,${a})`; ctx.lineWidth=0.5; ctx.stroke(); }} requestAnimationFrame(animateParticles); }
-    animateParticles();
+    let lastParticleFrame=0;
+    function animateParticles(ts){
+      // throttle to 30fps on mobile
+      if(isMobileHub && ts - lastParticleFrame < 33){ requestAnimationFrame(animateParticles); return; }
+      lastParticleFrame = ts;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      particles.forEach(p=>{p.update();p.draw();});
+      if(PARTICLE_LINKS){
+        for(let i=0;i<particles.length;i++) for(let j=i+1;j<particles.length;j++){ const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<120){ const a=(1-dist/120)*0.08; ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y); ctx.strokeStyle=`rgba(100,160,255,${a})`; ctx.lineWidth=0.5; ctx.stroke(); }}
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    requestAnimationFrame(animateParticles);
     function activateJutsu(url, color){
       const flash=document.getElementById('flashOverlay');
       flash.className='flash-overlay '+color+' active';

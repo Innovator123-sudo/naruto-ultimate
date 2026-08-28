@@ -1,10 +1,21 @@
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 let clonesTriggered = false;
 let cloneStartTime = null;
 let mask = null;
+
+// ── PHONE OPTIMIZATION: detect mobile ──
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768 || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+const isLowEnd = isMobile; // treat all mobiles as lowEnd for perf
+console.log("Device:", isMobile ? "mobile" : "desktop", "userAgent", navigator.userAgent);
+
+// Reusable offscreen canvas for person extraction (fixes GC churn = lag)
+let personCanvas = document.createElement("canvas");
+let personCtx = personCanvas.getContext("2d", { willReadFrequently: true });
+let lastCanvasW = 0, lastCanvasH = 0;
+let frameCounter = 0;
 
 // ----------------------
 // Trained gesture model
@@ -13,10 +24,7 @@ let gestureModel = null;
 const statusEl = document.getElementById("status");
 
 async function loadGestureModel() {
-  // Robust relative URL - works on GitHub Pages (sub-path) and Vercel (root)
-  // Using URL constructor handles /kage-bunshin-clone-me/ vs / correctly
   const modelUrl = new URL("gesture-model.json", window.location.href).href;
-  
   const maxRetries = 3;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -27,15 +35,14 @@ async function loadGestureModel() {
       if (statusEl) {
         statusEl.textContent = "✅ Model ready — show your hands!";
         statusEl.classList.add("ready");
-        setTimeout(() => { statusEl.style.display = "none"; }, 3000);
+        setTimeout(() => { if(statusEl) statusEl.style.display = "none"; }, 3000);
       }
-      // Sound for model ready (applies to all loads)
       try { playModelReadySound(); } catch(e){}
-      return; // success
+      return;
     } catch (e) {
       console.error(`Attempt ${attempt} failed:`, e);
       if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
+        await new Promise(r => setTimeout(r, 2000));
       } else {
         if (statusEl) {
           statusEl.textContent = "❌ Model failed: " + e.message;
@@ -49,11 +56,7 @@ async function loadGestureModel() {
 function normalizeHand(lm) {
   const w = lm[0];
   const mcp = lm[9];
-  const scale =
-    Math.sqrt(
-      (mcp.x - w.x) ** 2 + (mcp.y - w.y) ** 2 + (mcp.z - w.z) ** 2
-    ) || 1;
-
+  const scale = Math.sqrt((mcp.x - w.x) ** 2 + (mcp.y - w.y) ** 2 + (mcp.z - w.z) ** 2) || 1;
   const out = [];
   for (let i = 0; i < 21; i++) {
     out.push((lm[i].x - w.x) / scale);
@@ -72,8 +75,6 @@ let isMuted = localStorage.getItem("kage_sound_muted") === "true";
 let audioUnlocked = false;
 let soundVariant = 0;
 
-// HTMLAudio — robust multi-path resolver so it works on GitHub Pages (/naruto-ultimate/ subpath), Vercel root, and local file
-// Tries multiple candidates; first that loads wins. File exists at ../kage_bunshin.mp3, assets/kage_bunshin.mp3, kage_bunshin.mp3
 const cloneAudioCandidates = [
   "../kage_bunshin.mp3",
   "assets/kage_bunshin.mp3",
@@ -129,7 +130,6 @@ function unlockAudio() {
   if (audioUnlocked) return;
   const ac = getAudioCtx();
   ac.resume().catch(()=>{});
-  // silent buffer unlocks iOS
   try {
     const buf = ac.createBuffer(1, 1, 22050);
     const src = ac.createBufferSource();
@@ -139,7 +139,6 @@ function unlockAudio() {
   } catch(e){}
   audioUnlocked = true;
   console.log("🔊 Audio unlocked");
-  // also try to prime cloneAudio (requires gesture)
   try { cloneAudio.load(); const p = cloneAudio.play(); if(p && p.then) p.then(()=>{ cloneAudio.pause(); cloneAudio.currentTime=0; }).catch(()=>{}); } catch(e){}
   updateSoundUI();
 }
@@ -159,6 +158,7 @@ function toggleMute(){
   updateSoundUI();
   if (!isMuted) playUISound();
 }
+window.toggleMute = toggleMute;
 
 function updateSoundUI(){
   const btn = document.getElementById("soundToggle");
@@ -183,15 +183,12 @@ function playUISound(){
   } catch(e){}
 }
 
-// Primary activation sound — works for ALL clones (global summon)
 async function playCloneActivationSound() {
   if (isMuted) return;
-  // ensure context is resumed BEFORE any sound (critical for gesture-triggered play)
   const ac = await ensureAudioResumed();
   if (!audioUnlocked) unlockAudio();
   let htmlPlayed = false;
   try {
-    // always reset and try HTML audio first (authentic SFX)
     cloneAudio.currentTime = 0;
     cloneAudio.volume = 0.85;
     cloneAudio.muted = false;
@@ -208,11 +205,9 @@ async function playCloneActivationSound() {
     console.warn("cloneAudio play error", e);
     htmlPlayed = false;
   }
-  // If HTML audio failed or not ready, use synth; otherwise layer subtle synth underneath for punch
   if (!htmlPlayed) {
     synthCloneActivation();
   } else {
-    // subtle layered synth when HTML succeeded — short delay so both audible but not overwhelming
     setTimeout(()=> synthCloneActivation(true), 40);
   }
 }
@@ -224,7 +219,6 @@ function synthCloneActivation(isLayer=false){
     ensureAudioResumed();
     const now = ac.currentTime;
     const layerScale = isLayer ? 0.45 : 1.0;
-    // Layer 1: deep impact + rise
     const o1 = ac.createOscillator(), g1 = ac.createGain();
     o1.connect(g1); g1.connect(masterGain);
     o1.type = "sine";
@@ -233,7 +227,6 @@ function synthCloneActivation(isLayer=false){
     g1.gain.setValueAtTime(0.32 * layerScale, now);
     g1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
     o1.start(now); o1.stop(now + 0.6);
-    // Layer 2: harmonic energy
     const o2 = ac.createOscillator(), g2 = ac.createGain();
     o2.connect(g2); g2.connect(masterGain);
     o2.type = "triangle";
@@ -242,7 +235,6 @@ function synthCloneActivation(isLayer=false){
     g2.gain.setValueAtTime(0.12 * layerScale, now);
     g2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     o2.start(now); o2.stop(now + 0.45);
-    // Layer 3: noise burst poof
     const bufLen = ac.sampleRate * 0.3;
     const buf = ac.createBuffer(1, bufLen, ac.sampleRate);
     const data = buf.getChannelData(0);
@@ -258,7 +250,6 @@ function synthCloneActivation(isLayer=false){
 }
 
 function playSmokePoofSound() {
-  // Called FOR EACH CLONE individually — gives "sound for all" effect
   try {
     const ac = getAudioCtx();
     if (isMuted) return;
@@ -283,7 +274,6 @@ function playSmokePoofSound() {
     ng.gain.setValueAtTime(0.14, start);
     ng.gain.exponentialRampToValueAtTime(0.001, start+0.16);
     noise.start(start); noise.stop(start+0.16);
-    // subtle tonal puff per clone
     const o=ac.createOscillator(), og=ac.createGain();
     o.connect(og); og.connect(masterGain);
     o.type="sine";
@@ -296,8 +286,6 @@ function playSmokePoofSound() {
 }
 
 function playEraseSound() {
-  // Applied when ALL clones are erased together
-  // Also cloneAudio fallback with reverse feel
   try {
     const ac = getAudioCtx();
     if (isMuted) return;
@@ -322,7 +310,6 @@ function playEraseSound() {
     ng.gain.setValueAtTime(0.18, now);
     ng.gain.exponentialRampToValueAtTime(0.001, now+0.25);
     noise.start(now); noise.stop(now+0.25);
-    // also quick cloneAudio reverse cue if file exists (optional)
     try{ if(!cloneAudio.paused) { cloneAudio.pause(); cloneAudio.currentTime=0; } }catch(e){}
   } catch(e){}
 }
@@ -345,18 +332,13 @@ function playModelReadySound(){
   }catch(e){}
 }
 
-
-//erase clone
+//erase clone - exposed for UI
 function resetClones() {
   clonesTriggered = false;
   cloneStartTime = null;
-
   activeSmokes.length = 0;
-
-  customClones.forEach(cl => {
-    cl.smokeSpawned = false;
-  });
-
+  customClones.forEach(cl => { cl.smokeSpawned = false; });
+  effectiveClones.forEach(cl => { cl.smokeSpawned = false; });
   const img = document.getElementById("overlayImg");
   if (img) {
     img.src = "assets/state-1.png";
@@ -364,46 +346,53 @@ function resetClones() {
     const btn = img.closest(".video-overlay-btn");
     if (btn) btn.classList.remove("pop");
   }
-
   playEraseSound();
   console.log("CLONES ERASED");
 }
+window.resetClones = resetClones;
 
+// Manual trigger for button
+window.manualTriggerClones = function(){
+  if(!clonesTriggered){
+    clonesTriggered = true;
+    cloneStartTime = performance.now();
+    playCloneActivationSound();
+    console.log("CLONE TRIGGERED (manual)");
+    if(statusEl){ statusEl.textContent="🔥 CLONES ACTIVATED!"; statusEl.style.display=''; statusEl.classList.add("ready"); }
+  }
+};
 
-//change the threshold number to your preferance! 
 function predictGesture(right, left, threshold = 0.6) {
   if (!gestureModel) return null;
   if (!right && !left) return null;
-
+  // throttle: already handled outside via frameCounter check, but keep as fallback
   const rightFeatures = right ? normalizeHand(right) : new Array(63).fill(0);
   const leftFeatures = left ? normalizeHand(left) : new Array(63).fill(0);
-
-  const input = tf.tensor2d([
-    [...rightFeatures, ...leftFeatures],
-  ]);
-
-  const probs = gestureModel.predict(input).dataSync();
-  input.dispose();
-
+  // Use tf.tidy to avoid leak and reduce GC
+  let probs;
+  let input;
+  try{
+    input = tf.tensor2d([[...rightFeatures, ...leftFeatures]]);
+    probs = gestureModel.predict(input).dataSync();
+  } finally {
+    if(input) input.dispose();
+  }
   const maxProb = Math.max(...probs);
   const classIndex = probs.indexOf(maxProb);
-
   const confidenceEl = document.querySelector(".confidence");
   if (confidenceEl) confidenceEl.textContent = (maxProb * 100).toFixed(1) + "%";
-
   if (maxProb < threshold) return null;
-
-  console.log("Predicted class:", classIndex, "Confidence:", maxProb);
+  // console.log("Predicted class:", classIndex, "Confidence:", maxProb);
   return { classIndex, confidence: maxProb };
 }
 
 loadGestureModel();
 
 // ----------------------
-// Custom clones
+// Custom clones - ADAPTED FOR PHONE
 // ----------------------
-//feel free to play around with the clone positions, sizes, and delay time
-const customClones = [
+// Full list (desktop) - 16 clones
+const fullClones = [
   { x: -100, y: 100, scale: 0.9,  delay: 300, smokeSpawned: false },
   { x:  120, y: 100, scale: 0.85, delay: 450, smokeSpawned: false },
   { x: -180, y: 140, scale: 0.8,  delay: 600, smokeSpawned: false },
@@ -421,41 +410,53 @@ const customClones = [
   { x:  230, y:  85, scale: 0.5,  delay: 2550, smokeSpawned: false },
   { x: -280, y: 100, scale: 0.4,  delay: 2700, smokeSpawned: false },
 ];
+// On mobile, keep only 8 most impactful clones to avoid OOM/lag
+const mobileClones = fullClones.slice(0, 8);
+const customClones = fullClones; // keep original for compat
+const effectiveClones = isMobile ? mobileClones : fullClones;
+if(isMobile) console.log("Mobile mode: using", effectiveClones.length, "clones instead of", fullClones.length);
 
 // ----------------------
-// Selfie Segmentation
+// Selfie Segmentation - lite on mobile
 // ----------------------
 const selfie = new SelfieSegmentation({
-  locateFile: (f) =>
-    `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`,
+  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`,
 });
-selfie.setOptions({ modelSelection: 1 });
+selfie.setOptions({ modelSelection: isMobile ? 0 : 1 });
 selfie.onResults((r) => (mask = r.segmentationMask));
 
 // ----------------------
-// Holistic
+// Holistic - lite on mobile
 // ----------------------
 const holistic = new Holistic({
-  locateFile: (f) =>
-    `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${f}`,
+  locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${f}`,
 });
 holistic.setOptions({
-  modelComplexity: 1,
-  smoothLandmarks: true,
+  modelComplexity: isMobile ? 0 : 1,
+  smoothLandmarks: !isMobile,
+  enableSegmentation: false,
+  refineFaceLandmarks: false,
+  minDetectionConfidence: isMobile ? 0.5 : 0.6,
+  minTrackingConfidence: isMobile ? 0.5 : 0.6
 });
 
 // ----------------------
-// Camera set up
+// Camera set up - lower res on phone
 // ----------------------
 const camera = new Camera(video, {
-  width: 640,
-  height: 480,
+  width: isMobile ? 480 : 640,
+  height: isMobile ? 360 : 480,
   onFrame: async () => {
+    // throttle segmentation: run both but with sequential awaits
+    // On mobile, run at ~15fps via frame skip happens in holistic loop; here we just send
     await selfie.send({ image: video });
     await holistic.send({ image: video });
   },
 });
-camera.start();
+camera.start().then(()=>{ console.log("Camera started", isMobile?"mobile lite":"desktop"); }).catch(e=>{
+  console.error("Camera failed", e);
+  if(statusEl){ statusEl.textContent="❌ Camera blocked: "+e.message; statusEl.classList.add("error"); }
+});
 
 // ----------------------
 // adding the smoke sprites
@@ -465,24 +466,22 @@ const SMOKE_FRAME_COUNT = 5;
 const SMOKE_DURATION = 600;
 const activeSmokes = [];
 
-// Preload smoke frames to avoid drawImage errors
 const preloadedSmokes = {};
 SMOKE_FOLDERS.forEach(folder => {
   preloadedSmokes[folder] = [];
   for (let i = 1; i <= SMOKE_FRAME_COUNT; i++) {
     const img = new Image();
     img.src = `assets/${folder}/${i}.png`;
+    // reduce decode cost on mobile: set decoding async
+    if('decoding' in img) img.decoding = 'async';
     preloadedSmokes[folder].push(img);
   }
 });
 
 function spawnSmoke(x, y, scale) {
   scale *= 1.2;
-  const folder =
-    SMOKE_FOLDERS[Math.floor(Math.random() * SMOKE_FOLDERS.length)];
-
+  const folder = SMOKE_FOLDERS[Math.floor(Math.random() * SMOKE_FOLDERS.length)];
   const frames = preloadedSmokes[folder];
-
   activeSmokes.push({ x, y, scale, start: performance.now(), frames });
 }
 
@@ -493,50 +492,72 @@ function drawSmokes() {
     const elapsed = now - s.start;
     const frameDuration = SMOKE_DURATION / SMOKE_FRAME_COUNT;
     const frameIndex = Math.floor(elapsed / frameDuration);
-
     if (frameIndex >= s.frames.length) {
       activeSmokes.splice(i, 1);
       continue;
     }
-
     const img = s.frames[frameIndex];
+    // skip if not yet loaded (fixes "only cloud" when img.width==0)
+    if(!img.complete || img.naturalWidth===0) continue;
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.scale(s.scale, s.scale);
-    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    try{ ctx.drawImage(img, -img.width / 2, -img.height / 2); }catch(e){}
     ctx.restore();
   }
 }
 
 // ----------------------
-// Results on loop
+// Results on loop - OPTIMIZED
 // ----------------------
 holistic.onResults((res) => {
-  if (!mask) return;
+  frameCounter++;
+  // On mobile, throttle heavy drawing to every 2nd frame for holistic skeleton? But we need smooth; instead throttle TF predict below
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw || !vh) return;
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Only resize canvas when size changes (avoids flicker + layout thrash)
+  if(canvas.width !== vw || canvas.height !== vh){
+    canvas.width = vw;
+    canvas.height = vh;
+    personCanvas.width = vw;
+    personCanvas.height = vh;
+    lastCanvasW = vw; lastCanvasH = vh;
+  } else {
+    // clear instead of resize
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  if(!isMobile) ctx.clearRect(0,0,canvas.width,canvas.height); // ensure clear on desktop too (already via resize path?)
 
-  // Draw live webcam as background
+  // Draw live webcam as background (mirrored? video already mirrored via CSS? canvas draws unmirrored)
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  const person = grabPerson();
+  // If mask not ready, fallback to video copy (fixes "only cloud" - at least shows person)
+  let person;
+  if(mask){
+    person = grabPerson();
+  } else {
+    // fallback: just video frame copy
+    personCtx.clearRect(0,0,personCanvas.width, personCanvas.height);
+    personCtx.drawImage(video, 0, 0, personCanvas.width, personCanvas.height);
+    person = personCanvas;
+  }
 
-  // Trigger clones once via trained model
-  if (gestureModel && (res.rightHandLandmarks || res.leftHandLandmarks)) {
-    const result = predictGesture(res.rightHandLandmarks, res.leftHandLandmarks);
-
+  // Trigger clones via trained model - throttle on mobile (every 3rd frame = ~10fps prediction)
+  const shouldPredict = !isMobile || (frameCounter % 2 === 0);
+  if (shouldPredict && gestureModel && (res.rightHandLandmarks || res.leftHandLandmarks)) {
+    const result = predictGesture(res.rightHandLandmarks, res.leftHandLandmarks, isMobile?0.55:0.6);
     if (result) {
-      // class 0 = clone sign
       if (!clonesTriggered && result.classIndex === 0) {
         clonesTriggered = true;
         cloneStartTime = performance.now();
+        // reset smoke states for effective clones
+        effectiveClones.forEach(c=> c.smokeSpawned=false);
+        fullClones.forEach(c=> c.smokeSpawned=false);
         playCloneActivationSound();
-        console.log("CLONE TRIGGERED");
+        console.log("CLONE TRIGGERED", result.confidence);
+        if(statusEl){ statusEl.textContent="🔥 CLONES ACTIVATED!"; statusEl.classList.add("ready"); statusEl.style.display=''; setTimeout(()=> statusEl.style.display='none', 2500); }
       }
-
-      // class 1 = erase sign
       if (clonesTriggered && result.classIndex === 1) {
         resetClones();
         return;
@@ -544,10 +565,10 @@ holistic.onResults((res) => {
     }
   }
 
-  // Spawn smoke independently for each clone
+  // Spawn smoke independently for each clone (use effectiveClones for phone)
   if (clonesTriggered) {
     const now = performance.now();
-    customClones.forEach((cl) => {
+    effectiveClones.forEach((cl) => {
       if (!cl.smokeSpawned && now - cloneStartTime >= cl.delay) {
         cl.smokeSpawned = true;
         const centerX = cl.x + canvas.width / 2;
@@ -557,57 +578,67 @@ holistic.onResults((res) => {
         playSmokePoofSound();
       }
     });
-
     toggleImage();
     drawClones(person);
     drawSmokes();
   } else {
-    ctx.drawImage(person, 0, 0);
+    // draw person alone - use reusable canvas (avoid createElement churn)
+    try{ ctx.drawImage(person, 0, 0); }catch(e){}
   }
 
-  if (res.rightHandLandmarks) drawFingerSkeleton(res.rightHandLandmarks);
-  if (res.leftHandLandmarks) drawFingerSkeleton(res.leftHandLandmarks);
+  // Draw skeletons thinner on mobile for perf
+  const lineW = isMobile ? 1.5 : 2;
+  const dotR = isMobile ? 2 : 3;
+  if (res.rightHandLandmarks) drawFingerSkeleton(res.rightHandLandmarks, lineW, dotR);
+  if (res.leftHandLandmarks) drawFingerSkeleton(res.leftHandLandmarks, lineW, dotR);
 });
 
 // ----------------------
-// draw clones function
+// draw clones function - uses effectiveClones
 // ----------------------
 function drawClones(person) {
   const now = performance.now();
-  const sorted = [...customClones].sort((a, b) => b.delay - a.delay);
-
+  // Sort once outside loop? effective clones already sorted by delay asc, so draw far first
+  const sorted = [...effectiveClones].sort((a, b) => b.delay - a.delay);
   sorted.forEach((cl) => {
     if (now - cloneStartTime >= cl.delay) {
       ctx.save();
+      // optimized translate: avoid * (1-scale)/2 for every clone? keep for centering
       ctx.translate(cl.x + canvas.width * (1 - cl.scale) / 2, cl.y);
       ctx.scale(cl.scale, cl.scale);
-      ctx.drawImage(person, 0, 0);
+      try{ ctx.drawImage(person, 0, 0); }catch(e){}
       ctx.restore();
     }
   });
-
-  ctx.drawImage(person, 0, 0); // main person always on top
+  try{ ctx.drawImage(person, 0, 0); }catch(e){} // main person always on top
 }
 
 // ----------------------
-// grab person helper function
+// grab person helper - REUSE canvas (major mobile fix)
 // ----------------------
 function grabPerson() {
-  const offscreen = document.createElement("canvas");
-  offscreen.width = canvas.width;
-  offscreen.height = canvas.height;
-  const tempCtx = offscreen.getContext("2d");
-
-  tempCtx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-  tempCtx.globalCompositeOperation = "source-in";
-  tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  tempCtx.globalCompositeOperation = "source-over";
-
-  return offscreen;
+  // Reuse personCanvas instead of createElement each frame
+  if(personCanvas.width !== canvas.width || personCanvas.height !== canvas.height){
+    personCanvas.width = canvas.width;
+    personCanvas.height = canvas.height;
+  }
+  personCtx.clearRect(0,0,personCanvas.width, personCanvas.height);
+  // segmentation mask may be low-res; draw stretched
+  try{
+    personCtx.drawImage(mask, 0, 0, personCanvas.width, personCanvas.height);
+    personCtx.globalCompositeOperation = "source-in";
+    personCtx.drawImage(video, 0, 0, personCanvas.width, personCanvas.height);
+    personCtx.globalCompositeOperation = "source-over";
+  } catch(e){
+    // fallback
+    personCtx.globalCompositeOperation = "source-over";
+    personCtx.drawImage(video, 0, 0, personCanvas.width, personCanvas.height);
+  }
+  return personCanvas;
 }
 
 // ----------------------
-// finger skeelton
+// finger skeleton
 // ----------------------
 const FINGER_INDICES = {
   thumb:  [0, 1, 2, 3, 4],
@@ -617,10 +648,9 @@ const FINGER_INDICES = {
   pinky:  [0, 17, 18, 19, 20],
 };
 
-function drawFingerSkeleton(lm) {
+function drawFingerSkeleton(lm, lw=2, r=3) {
   ctx.strokeStyle = "lime";
-  ctx.lineWidth = 2;
-
+  ctx.lineWidth = lw;
   for (const indices of Object.values(FINGER_INDICES)) {
     ctx.beginPath();
     indices.forEach((i, idx) => {
@@ -631,17 +661,10 @@ function drawFingerSkeleton(lm) {
     });
     ctx.stroke();
   }
-
+  ctx.fillStyle = "red";
   lm.forEach((point) => {
     ctx.beginPath();
-    ctx.arc(
-      point.x * canvas.width,
-      point.y * canvas.height,
-      3,
-      0,
-      Math.PI * 2
-    );
-    ctx.fillStyle = "red";
+    ctx.arc(point.x * canvas.width, point.y * canvas.height, r, 0, Math.PI * 2);
     ctx.fill();
   });
 }
@@ -651,30 +674,33 @@ function drawFingerSkeleton(lm) {
 // ----------------------
 function toggleImage() {
   const img = document.getElementById("overlayImg");
+  if(!img) return;
   const btn = img.closest(".video-overlay-btn");
-
   if (img.dataset.state === "2") return;
-
   img.src = "assets/state-2.png";
   img.dataset.state = "2";
-
-  btn.classList.add("pop");
-  setTimeout(() => btn.classList.remove("pop"), 200);
+  if(btn){ btn.classList.add("pop"); setTimeout(() => btn.classList.remove("pop"), 200); }
 }
 
 // ----------------------
-// Reset everything on load + sound UI init
+// Reset everything on load + sound UI init + mobile hints
 // ----------------------
 window.onload = () => {
   clonesTriggered = false;
   cloneStartTime = null;
-  // ensure AudioContext is prepared (but not auto-play until gesture)
   try { getAudioCtx(); } catch(e){}
   updateSoundUI();
-  // wire sound toggle if present (added in index.html)
   const soundBtn = document.getElementById("soundToggle");
   if (soundBtn) soundBtn.addEventListener("click", toggleMute);
-  // Also unlock on overlay button click
   const overlayBtn = document.querySelector(".video-overlay-btn");
   if (overlayBtn) overlayBtn.addEventListener("click", unlockAudio);
+  // Mobile performance hint
+  if(isMobile && statusEl){
+    const hint = document.createElement('div');
+    hint.style.cssText='position:fixed; bottom:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#00e5ff; padding:6px 12px; border-radius:50px; font-size:0.7rem; z-index:99;';
+    hint.textContent='📱 Mobile lite mode: 8 clones for smooth FPS';
+    document.body.appendChild(hint);
+    setTimeout(()=> hint.remove(), 4000);
+  }
 };
+

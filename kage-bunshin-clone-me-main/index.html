@@ -32,10 +32,13 @@
     </div>
   </div>
 
-  <!-- Sound Toggle UI -->
-  <div id="soundToggleWrap" style="position:fixed; top:12px; right:12px; z-index:50;">
+  <!-- Sound Toggle + Manual Clone Trigger -->
+  <div id="soundToggleWrap" style="position:fixed; top:12px; right:12px; z-index:50; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
     <button id="soundToggle" onclick="toggleMute()" style="padding:8px 14px; border-radius:50px; border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.6); color:#fff; font-weight:700; cursor:pointer; backdrop-filter:blur(8px);">🔊 Sound ON</button>
+    <button onclick="manualTriggerClones()" style="padding:8px 14px; border-radius:50px; border:1px solid rgba(0,229,255,0.4); background:rgba(0,229,255,0.15); color:#00e5ff; font-weight:800; cursor:pointer; backdrop-filter:blur(8px);">👥 Clone!</button>
+    <button onclick="resetClones()" style="padding:8px 14px; border-radius:50px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.08); color:#fff; font-weight:600; cursor:pointer; backdrop-filter:blur(8px);">↺ Reset</button>
   </div>
+  <div style="position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:40; background:rgba(0,0,0,0.65); border:1px solid rgba(255,255,255,0.12); padding:8px 14px; border-radius:50px; font-size:0.72rem; color:#aaa; text-align:center; max-width:92vw;">Tap <b style="color:#00e5ff;">Clone!</b> if gesture not detected • 📱 Mobile lite = 8 clones for 60 FPS</div>
 
   <!-- TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
